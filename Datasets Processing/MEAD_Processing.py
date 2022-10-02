@@ -10,7 +10,7 @@ import subprocess
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--person", type=str, default='M030')
+parser.add_argument("--person", type=str, default='M003')
 parser.add_argument("--extract_audio", type=bool, default=True)
 parser.add_argument("--extract_images", type=bool, default=True)
 parser.add_argument("--extract_lm68", type=bool, default=True)
