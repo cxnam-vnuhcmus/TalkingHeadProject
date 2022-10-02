@@ -1,7 +1,7 @@
 # How often do you want to save output images during training.
-image_save_iter: 1000
+image_save_iter: 500
 # How often do you want to save trained models.
-snapshot_save_epoch: 25
+snapshot_save_iter: 2000
 # How often do you want to log the training stats.
 logging_iter: 100
 # Number of training epochs.
@@ -163,15 +163,15 @@ data:
     input_image:
         - images
 
-    output_h_w: 512, 512    
+    output_h_w: 256, 256    
     train:        
         roots:
             - datasets/train
-        batch_size: 1
+        batch_size: 3
         initial_sequence_length: 4
         max_sequence_length: 16        
         augmentations:
-            resize_smallest_side: 1024
+            resize_smallest_side: 512
             horizontal_flip: False            
     
     val:        

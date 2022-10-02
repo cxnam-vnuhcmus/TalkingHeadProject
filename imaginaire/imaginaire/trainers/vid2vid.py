@@ -535,7 +535,7 @@ class Trainer(BaseTrainer):
 
             # Zero-grad and backpropagate the loss.
             self.opt_G.zero_grad(set_to_none=True)
-            self.scaler_G.scale(total_loss).backward()
+            self.scaler_G.scale(total_loss).backward(retain_graph=True)
 
             # Optionally clip gradient norm.
             if hasattr(self.cfg.gen_opt, 'clip_grad_norm'):
@@ -620,7 +620,7 @@ class Trainer(BaseTrainer):
             # Zero-grad and backpropagate the loss.
             self.opt_D.zero_grad(set_to_none=True)
             self._time_before_backward()
-            self.scaler_D.scale(total_loss).backward()
+            self.scaler_D.scale(total_loss).backward(retain_graph=True)
 
             # Optionally clip gradient norm.
             if hasattr(self.cfg.dis_opt, 'clip_grad_norm'):
