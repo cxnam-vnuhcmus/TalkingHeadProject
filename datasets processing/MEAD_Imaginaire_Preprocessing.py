@@ -1,14 +1,38 @@
-import json
+r"""Convert Images and Landmark68 Folders of MEAD dataset to imaginaire format
+Spliting dataset into 80% train - 20% test.
+imagaires
+    |- datasets
+        |- train
+            |- images
+                |- seq00001
+                    |- 00001.jpeg
+                    |- ...
+            |- landmarks-dlib68
+                |- seq00001
+                    |- 00001.json
+                    |- ...
+        |- val 
+            |- images
+                |- seq00001
+                    |- 00001.jpeg
+                    |- ...
+            |- landmarks-dlib68
+                |- seq00001
+                    |- 00001.json
+                    |- ...
+Args:
+    person              :   id of character folder
+    mead_feature_folder :   path of mead features folder
+    imaginaire_folder   :   path of imaginaire folder
+Returns:
+    
+"""  
+
 import os
 from os.path import join
 import random
-import numpy as np
-from tqdm import tqdm
-import cv2
-from glob import glob
 import subprocess
 import argparse
-from sklearn.model_selection import train_test_split
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--person", type=str, default='M003')

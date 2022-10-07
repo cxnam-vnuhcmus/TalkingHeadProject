@@ -1,3 +1,9 @@
+r"""Video Preprocessing 
+- Extract to Audio
+- Extract to Images (frames of each video) 256x256x3
+- Extract to Landmarks (dlib68 landmark of each frame)    
+"""  
+
 import json
 import os
 from os.path import join
@@ -8,12 +14,13 @@ from mlxtend.image import extract_face_landmarks
 from glob import glob
 import subprocess
 import argparse
+import moviepy.editor as mp
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--person", type=str, default='M003')
 parser.add_argument("--extract_audio", type=bool, default=True)
-parser.add_argument("--extract_images", type=bool, default=True)
-parser.add_argument("--extract_lm68", type=bool, default=True)
+parser.add_argument("--extract_images", type=bool, default=False)
+parser.add_argument("--extract_lm68", type=bool, default=False)
 
 if __name__ == '__main__':
     args = parser.parse_args()
@@ -33,8 +40,11 @@ if __name__ == '__main__':
             os.makedirs(outputPath, exist_ok=True)
             outputPath = join(outputPath, f'{num:05d}.wav')
 
-            cmd = 'ffmpeg -i ' + filename + ' -ab 160k -ac 1 -ar 16000 -vn ' + outputPath
-            subprocess.call(cmd, shell=True)
+            # cmd = 'ffmpeg -i ' + filename + ' -ab 160k -ac 1 -ar 16000 -vn ' + outputPath
+            # subprocess.call(cmd, shell=True)
+            clip = mp.VideoFileClip(filename)
+            num_frames = round(clip.reader.fps*clip.reader.duration)
+            clip.audio.write_audiofile(outputPath, fps=16000)
             
     if (args.extract_images):
         inputFolder = join(root, f'MEAD/{args.person}/video/front')
