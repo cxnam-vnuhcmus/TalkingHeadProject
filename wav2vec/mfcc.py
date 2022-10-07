@@ -41,7 +41,7 @@ if __name__ == '__main__':
         for idx, filename in tqdm(enumerate(filelist)):
             outputPath = filename.replace('audios','mfcc')[:-4]
             os.makedirs(outputPath, exist_ok=True)
-            print(outputPath)
+
             imagePath = outputPath.replace('mfcc', 'images')
             num_frames = len(os.listdir(imagePath))
 
