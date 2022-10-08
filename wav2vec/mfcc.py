@@ -51,12 +51,13 @@ if __name__ == '__main__':
             check = 1
             while(check):
                 features = librosa.feature.mfcc(audio_signal, sr, n_mfcc=13, hop_length= hop_length, n_fft = 1200)
-                if features.shape[1] == num_frames:
+                features = features.T
+                if features.shape[0] == num_frames:
                     check = 0
                     for input_idx in range(num_frames):
-                        np.save(join(outputPath, f'{input_idx+1:05d}.npy'), features)
+                        np.save(join(outputPath, f'{input_idx+1:05d}.npy'), features[input_idx])
                 else:
-                    if features.shape[1] > num_frames:
+                    if features.shape[0] > num_frames:
                         hop_length += 1
                     else:
                         hop_length -= 1

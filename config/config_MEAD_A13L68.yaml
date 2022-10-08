@@ -1,0 +1,11 @@
+dataloader_name: DataLoader_MEAD_A13L68
+dataset_path: '../dataset/train_MEAD_A13L68.json'
+batch_size: 2
+num_workers: 1
+
+model_name: Model_LSTM
+n_epoches: 500
+learning_rate: 1.0e-4
+
+input_ndim: 13
+output_ndim: 136
