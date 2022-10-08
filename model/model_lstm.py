@@ -3,6 +3,8 @@ import torch.nn as nn
 import numpy as np
 import os
 from model.model_talkinghead import Model_TalkingHead
+from torch.optim import *
+from torch.nn import *
 
 class Model_LSTM(Model_TalkingHead):
     def __init__(self, config):
@@ -32,6 +34,8 @@ class Model_LSTM(Model_TalkingHead):
 
         self.init_model()
         self.num_params()
+        self.optim = globals()[config['optimizer']](self.parameters(), lr=config['learning_rate'])
+        self.loss = globals()[config['loss']]()
         self.register_buffer("step", torch.zeros(1, dtype=torch.long))
 
     #input shape (bs, no.frame, no.feature)

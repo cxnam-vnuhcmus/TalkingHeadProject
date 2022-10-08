@@ -25,6 +25,7 @@ class Dataset_MEAD_A13L68(Dataset):
 
 class DataLoader_MEAD_A13L68(DataLoader):
     def __init__(self, config):
+        self.config = config
         self.dataset = Dataset_MEAD_A13L68(config['dataset_path'])
         super(DataLoader_MEAD_A13L68, self).__init__(self.dataset,
                                 batch_size=config['batch_size'],
@@ -39,3 +40,6 @@ class DataLoader_MEAD_A13L68(DataLoader):
 
     def getDataset(self):
         return self.dataset
+
+    def getStepPerEpoch(self):
+        return np.ceil(len(self.dataset) / self.config['batch_size']).astype(np.int32)

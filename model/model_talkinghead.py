@@ -1,13 +1,22 @@
-import torch.nn as nn
+from torch import nn
 import numpy as np
 
 class Model_TalkingHead(nn.Module):
     def __init__(self):
         super(Model_TalkingHead, self).__init__()
+        self.config = None
+        self.optim = None
+        self.loss = None
 
     def init_model(self):
         for p in self.parameters():
             if p.dim() > 1: nn.init.xavier_uniform_(p)
+
+    def update(self, y_pred, y):
+        loss = self.loss(y_pred, y)
+        self.optim.zero_grad()
+        loss.backward()
+        self.optim.step()
 
     # def get_step(self):
     #     return self.step.data.item()
