@@ -1,3 +1,4 @@
+from gc import isenabled
 from torch import nn
 import numpy as np
 import torch
@@ -42,8 +43,10 @@ class Model_TalkingHead(nn.Module):
         return parameters
 
     def load(self, load_optim = True):
-        checkpoint = torch.load(str(self.config['pretrain_path']))
-
+        if next(self.parameters()).is_cuda and torch.cuda.is_available():
+            checkpoint = torch.load(str(self.config['pretrain_path']), map_location=f'cuda:{torch.cuda.current_device()}')
+        else:
+            checkpoint = torch.load(str(self.config['pretrain_path']), map_location='cpu')
         self.load_state_dict(checkpoint["model_state"])
 
         if load_optim == True and "optimizer_state" in checkpoint:

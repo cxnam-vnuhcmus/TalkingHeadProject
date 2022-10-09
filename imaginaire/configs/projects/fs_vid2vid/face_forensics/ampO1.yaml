@@ -202,7 +202,7 @@ test_data:
         normalize_momentum: 0.9
     input_types:
         - images:
-            ext: jpg
+            ext: jpeg
             num_channels: 3
             normalize: True
         - landmarks-dlib68:
@@ -231,8 +231,8 @@ test_data:
     test:
         is_lmdb: False
         roots:            
-            - projects/fs_vid2vid/test_data/faceForensics/reference
-            - projects/fs_vid2vid/test_data/faceForensics/driving
+            - ../results/MEAD_A13L68/reference
+            - ../results/MEAD_A13L68/driving
         batch_size: 1        
         augmentations:            
             resize_smallest_side: 1024

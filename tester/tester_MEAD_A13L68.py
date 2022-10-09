@@ -33,6 +33,7 @@ if __name__ == '__main__':
 
         loss = model.calculate_loss(pred, y)
         valid_running_loss += loss.item()
+        print(f'Val running loss: {loss}')
 
     valid_epoch_loss = valid_running_loss / counter
     print(f'Val Loss: {valid_epoch_loss}')
