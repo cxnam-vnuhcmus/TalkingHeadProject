@@ -25,6 +25,9 @@ class Model_TalkingHead(nn.Module):
         self.optim.step()
         return loss
 
+    def calculate_loss(self, y_pred, y):
+        return self.loss_fn(y_pred, y)
+
     def get_step(self):
         return self.step.data.item()
 
@@ -40,19 +43,16 @@ class Model_TalkingHead(nn.Module):
 
     def load(self, load_optim = True):
         checkpoint = torch.load(str(self.config['pretrain_path']))
-        if torch.cuda.is_available():
-            checkpoint = checkpoint.cuda()
-        
-        self.step = checkpoint["step"] - 1
-        
+
         self.load_state_dict(checkpoint["model_state"])
 
         if load_optim == True and "optimizer_state" in checkpoint:
             self.optim.load_state_dict(checkpoint["optimizer_state"])
-            
+
         fname = os.path.basename(self.config['pretrain_path'])
-        step = self.step.cpu().numpy()[0]
-        print(f"Load pretrained model {fname} | Step: {step}")
+        epoch = checkpoint["epoch"]
+        print(f"Load pretrained model {fname} | Epoch: {epoch}")
+        return epoch
 
     def save(self, epoch, loss, save_optim = True):
         os.makedirs(join(self.config['save_path'],'backups'), exist_ok=True)

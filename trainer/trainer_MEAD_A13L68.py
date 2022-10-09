@@ -14,7 +14,7 @@ args = parser.parse_args()
 
 if __name__ == '__main__': 
     config = yaml.safe_load(open(args.config_file))
-    dataloader = globals()[config['dataloader_name']](config)
+    dataloader = globals()[config['dataloader_name']](config, is_train=True)
     if torch.cuda.is_available():
         model = globals()[config['model_name']](config).cuda()
     model.train()

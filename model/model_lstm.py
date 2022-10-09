@@ -1,7 +1,4 @@
-import torch
 import torch.nn as nn
-import numpy as np
-import os
 from model.model_talkinghead import Model_TalkingHead
 from torch.optim import *
 from torch.nn import *
