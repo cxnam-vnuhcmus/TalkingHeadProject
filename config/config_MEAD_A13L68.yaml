@@ -1,14 +1,22 @@
 dataloader_name: DataLoader_MEAD_A13L68
 dataset_path: '../dataset/train_MEAD_A13L68.json'
-batch_size: 2
+batch_size: 1
 num_workers: 1
 
 model_name: Model_LSTM
-n_epoches: 500
+n_epoches: 200
 learning_rate: 1.0e-4
-
 optimizer: Adam
 loss: MSELoss
+
+save_path: '../results/MEAD_A13L68'
+save_epoch: 10
+
+log_path: '../logs/MEAD_A13L68'
+log_step: 1000
+
+use_pretrain: False
+pretrain_path: ''
 
 input_ndim: 13
 output_ndim: 136

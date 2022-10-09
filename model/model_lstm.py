@@ -35,8 +35,7 @@ class Model_LSTM(Model_TalkingHead):
         self.init_model()
         self.num_params()
         self.optim = globals()[config['optimizer']](self.parameters(), lr=config['learning_rate'])
-        self.loss = globals()[config['loss']]()
-        self.register_buffer("step", torch.zeros(1, dtype=torch.long))
+        self.loss_fn = globals()[config['loss']]()
 
     #input shape (bs, no.frame, no.feature)
     def forward(self, x):

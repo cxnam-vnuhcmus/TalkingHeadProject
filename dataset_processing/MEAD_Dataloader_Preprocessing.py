@@ -21,13 +21,16 @@ if __name__ == '__main__':
         
         total_list = []
         lm_folder = join(args.mead_feature_folder, args.person, 'landmarks')
-        lm_list = sorted(glob(join(lm_folder, '**/*.json'), recursive=True))
-
+        
         total_list = []
-        for lm_file in lm_list:
-            mfcc_file = lm_file.replace('landmarks', 'mfcc')
-            mfcc_file = mfcc_file.replace('json', 'npy')
-            total_list.append(f'{mfcc_file}|{lm_file}')
+        emo_list = sorted(glob(join(lm_folder, '*')))
+        for emo in emo_list:
+            lv_list = sorted(glob(join(emo, '*')))
+            for lv in lv_list:
+                lm_list = sorted(glob(join(lv, '*')))
+                for lm_file in lm_list:
+                    mfcc_file = lm_file.replace('landmarks', 'mfcc')
+                    total_list.append(f'{mfcc_file}|{lm_file}')
 
         random.seed(0)
         random.shuffle(total_list)
