@@ -45,8 +45,6 @@ class DataLoader_MEAD_A13L68(DataLoader):
         dataset_path = config['test_dataset_path']
         if is_train:
             dataset_path = config['train_dataset_path']
-        import sys
-        print(sys.path)
         self.dataset = Dataset_MEAD_A13L68(dataset_path)
         super(DataLoader_MEAD_A13L68, self).__init__(self.dataset,
                                 batch_size=config['batch_size'],
