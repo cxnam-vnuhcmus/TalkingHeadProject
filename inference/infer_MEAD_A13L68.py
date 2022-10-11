@@ -27,7 +27,7 @@ if __name__ == '__main__':
     model.eval()
 
     mfcc_path = '/root/Datasets/Features/M003/mfcc/neutral/level_1/00001'
-    lm_path = mfcc_path.replace('mfcc','landmarks')
+    lm_path = mfcc_path.replace('mfcc','landmarks74')
     mfcc_data_list, lm_data_list = dataloader.getDataset().read_data_from_path(mfcc_path, lm_path)
 
     x,y = torch.from_numpy(mfcc_data_list).unsqueeze(0), torch.from_numpy(lm_data_list).unsqueeze(0)

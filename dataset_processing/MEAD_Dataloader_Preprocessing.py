@@ -20,7 +20,7 @@ if __name__ == '__main__':
         test_file = join(args.output_folder, 'test_MEAD_A13L68.json')
         
         total_list = []
-        lm_folder = join(args.mead_feature_folder, args.person, 'landmarks')
+        lm_folder = join(args.mead_feature_folder, args.person, 'landmarks74')
         
         total_list = []
         emo_list = sorted(glob(join(lm_folder, '*')))
@@ -29,7 +29,7 @@ if __name__ == '__main__':
             for lv in lv_list:
                 lm_list = sorted(glob(join(lv, '*')))
                 for lm_file in lm_list:
-                    mfcc_file = lm_file.replace('landmarks', 'mfcc')
+                    mfcc_file = lm_file.replace('landmarks74', 'mfcc')
                     total_list.append(f'{mfcc_file}|{lm_file}')
 
         random.seed(0)

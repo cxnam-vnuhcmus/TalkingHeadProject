@@ -31,7 +31,7 @@ class Dataset_MEAD_A13L68(Dataset):
         lm_list = sorted(glob(join(lm_path, '*.json')))
         for lm_file in lm_list:
             with open(lm_file, 'r') as f:
-                lm_data = json.load(f)
+                lm_data = json.load(f)['lm68']
             lm_data_list.append([lm_data])
         lm_data_list = np.vstack(lm_data_list).astype(np.float32)
         return mfcc_data_list, lm_data_list

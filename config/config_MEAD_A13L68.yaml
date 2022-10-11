@@ -13,8 +13,8 @@ loss: MSELoss
 save_path: '../results/MEAD_A13L68'
 save_epoch: 100
 
-use_pretrain: True
-pretrain_path: '../results/MEAD_A13L68/best_model.pt'
+use_pretrain: False
+pretrain_path: '../results/MEAD_A13L68/backups/epoch_000600.pt'
 
 input_ndim: 13
 output_ndim: 136
