@@ -49,10 +49,14 @@ if __name__ == '__main__':
     img_path = mfcc_path.replace('mfcc','images')
     cmd = f'cp -r {img_path}/*.jpeg {driving_image_path}'
     subprocess.call(cmd, shell=True)
+    
+    lm_path = mfcc_path.replace('mfcc','landmarks')
+    cmd = f'cp -r {lm_path}/*.json {driving_lm_path}'
+    subprocess.call(cmd, shell=True)
 
-    pred = pred[0].to(torch.int16)
-    for index in range(pred.shape[0]):
-        outputPath = join(driving_lm_path, f'{index+1:05d}.json')
-        with open(outputPath, 'w') as f:  
-            point = pred[index].reshape(68,2)
-            json.dump(point.tolist(), f)
+    # pred = pred[0].to(torch.int16)
+    # for index in range(pred.shape[0]):
+    #     outputPath = join(driving_lm_path, f'{index+1:05d}.json')
+    #     with open(outputPath, 'w') as f:  
+    #         point = pred[index].reshape(68,2)
+    #         json.dump(point.tolist(), f)

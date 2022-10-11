@@ -3,7 +3,7 @@ image_save_iter: 500
 # How often do you want to save trained models.
 snapshot_save_iter: 2000
 # How often do you want to log the training stats.
-logging_iter: 100
+logging_iter: 10
 # Number of training epochs.
 max_epoch: 200
 # Number of epochs training single frame generator.
@@ -179,7 +179,7 @@ data:
             - datasets/val
         batch_size: 1        
         augmentations:            
-            resize_smallest_side: 1024
+            resize_smallest_side: 512
             horizontal_flip: False
 
 
@@ -227,7 +227,7 @@ test_data:
     input_image:
         - images
 
-    output_h_w: 512, 512    
+    output_h_w: 256, 256    
     test:
         is_lmdb: False
         roots:            
@@ -235,5 +235,5 @@ test_data:
             - ../results/MEAD_A13L68/driving
         batch_size: 1        
         augmentations:            
-            resize_smallest_side: 1024
+            resize_smallest_side: 512
             horizontal_flip: False
