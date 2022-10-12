@@ -5,7 +5,7 @@ import torch
 from glob import glob
 from os.path import join
 
-class Dataset_MEAD_A13L68(Dataset):
+class Dataset_MEAD_A13L74(Dataset):
     def __init__(self, path):
         self.data_path = []
         with open(path, 'r') as f:
@@ -31,7 +31,7 @@ class Dataset_MEAD_A13L68(Dataset):
         lm_list = sorted(glob(join(lm_path, '*.json')))
         for lm_file in lm_list:
             with open(lm_file, 'r') as f:
-                lm_data = json.load(f)
+                lm_data = json.load(f)['lm68']
             lm_data_list.append([lm_data])
         lm_data_list = np.vstack(lm_data_list).astype(np.float32)
         return mfcc_data_list, lm_data_list
@@ -39,14 +39,14 @@ class Dataset_MEAD_A13L68(Dataset):
     def __len__(self):
         return len(self.data_path)
 
-class DataLoader_MEAD_A13L68(DataLoader):
+class DataLoader_MEAD_A13L74(DataLoader):
     def __init__(self, config, is_train=True):
         self.config = config
         dataset_path = config['test_dataset_path']
         if is_train:
             dataset_path = config['train_dataset_path']
-        self.dataset = Dataset_MEAD_A13L68(dataset_path)
-        super(DataLoader_MEAD_A13L68, self).__init__(self.dataset,
+        self.dataset = Dataset_MEAD_A13L74(dataset_path)
+        super(DataLoader_MEAD_A13L74, self).__init__(self.dataset,
                                 batch_size=config['batch_size'],
                                 num_workers=config['num_workers'],
                                 shuffle=True,

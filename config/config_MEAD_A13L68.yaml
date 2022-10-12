@@ -1,6 +1,6 @@
 dataloader_name: DataLoader_MEAD_A13L68
-train_dataset_path: '../dataset/train_MEAD_A13L68.json'
-test_dataset_path: '../dataset/test_MEAD_A13L68.json'
+train_dataset_path: 'dataset/train_MEAD_A13L68.json'
+test_dataset_path: 'dataset/test_MEAD_A13L68.json'
 batch_size: 1
 num_workers: 1
 
@@ -10,11 +10,13 @@ learning_rate: 1.0e-4
 optimizer: Adam
 loss: MSELoss
 
-save_path: '../results/MEAD_A13L68'
+save_path: 'results/MEAD_A13L68'
 save_epoch: 100
 
 use_pretrain: False
-pretrain_path: '../results/MEAD_A13L68/backups/epoch_000600.pt'
+pretrain_path: 'results/MEAD_A13L68/backups/epoch_000600.pt'
+driving_path: 'results/imaginaire/datasets256/driving'
+reference_path: 'results/imaginaire/datasets256/reference'
 
 input_ndim: 13
 output_ndim: 136
