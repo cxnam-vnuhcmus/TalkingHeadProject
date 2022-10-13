@@ -15,7 +15,7 @@ class Dataset_MEAD_A13L74(Dataset):
         parts = self.data_path[index].split('|')
         mfcc_path, lm_path = parts[0], parts[1]
 
-        mfcc_data_list, lm_data_list = self.read_data_from_path(mfcc_path, lm_path)
+        mfcc_data_list, lm_data_list, _ = self.read_data_from_path(mfcc_path, lm_path)
 
         return torch.from_numpy(mfcc_data_list), torch.from_numpy(lm_data_list)
     

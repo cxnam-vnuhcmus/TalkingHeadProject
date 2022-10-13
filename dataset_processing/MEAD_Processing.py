@@ -14,17 +14,21 @@ from mlxtend.image import extract_face_landmarks
 from glob import glob
 import subprocess
 import argparse
-import moviepy.editor as mp
+import moviepy.editor as mv
 import mediapipe as mp
 mp_face_detection = mp.solutions.face_detection
 mp_drawing = mp.solutions.drawing_utils
+import librosa
+import python_speech_features
+
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--person", type=str, default='M003')
+parser.add_argument("--person", type=str, default='M030')
 parser.add_argument("--extract_audio", type=bool, default=False)
 parser.add_argument("--extract_images", type=bool, default=False)
+parser.add_argument("--extract_mfcc13", type=bool, default=True)
 parser.add_argument("--extract_lm68", type=bool, default=False)
-parser.add_argument("--extract_lm74", type=bool, default=True)
+parser.add_argument("--extract_lm74", type=bool, default=False)
 
 if __name__ == '__main__':
     args = parser.parse_args()
@@ -46,7 +50,7 @@ if __name__ == '__main__':
 
             # cmd = 'ffmpeg -i ' + filename + ' -ab 160k -ac 1 -ar 16000 -vn ' + outputPath
             # subprocess.call(cmd, shell=True)
-            clip = mp.VideoFileClip(filename)
+            clip = mv.VideoFileClip(filename)
             num_frames = round(clip.reader.fps*clip.reader.duration)
             clip.audio.write_audiofile(outputPath, fps=16000)
             
@@ -77,7 +81,39 @@ if __name__ == '__main__':
                 cv2.imwrite( imglist[i][0:-len('.bmp')] + '.jpeg', crop_img)
 
             subprocess.call('rm -rf '+ outputPath + '/*.bmp', shell=True)
+    
+    if args.extract_mfcc13:
+        inputFolder = join(root, f'Features/{args.person}/audios')
+        outputFolder = join(root, f'Features/{args.person}/mfcc')
+        os.makedirs(outputFolder, exist_ok=True)
+        filelist = sorted(glob(join(inputFolder, '**/*.wav'), recursive=True))
+        
+        for idx, filename in tqdm(enumerate(filelist)):
+            subPath = filename[len(inputFolder)+1:-len('.wav')-5]
+            num = int(filename[-len('.wav')-3:-len('.wav')])           
+            outputPath = join(root, outputFolder, subPath, f'{num:05d}')
+            os.makedirs(outputPath, exist_ok=True)
             
+            imagePath = outputPath.replace('mfcc', 'images')
+            num_frames = len(os.listdir(imagePath))
+
+            audio_signal, sr = librosa.load(filename, sr=16000)
+            hop_length = int(sr/ 30)
+
+            check = 1
+            while(check):
+                features = librosa.feature.mfcc(audio_signal, sr, n_mfcc=13, hop_length= hop_length, n_fft = 1200)
+                features = features.T
+                if features.shape[0] == num_frames:
+                    check = 0
+                    for input_idx in range(num_frames):
+                        np.save(join(outputPath, f'{input_idx+1:05d}.npy'), features[input_idx])
+                else:
+                    if features.shape[0] > num_frames:
+                        hop_length += 1
+                    else:
+                        hop_length -= 1
+                                
     if (args.extract_lm68):
         inputFolder = join(root, f'Features/{args.person}/images512')
         outputFolder = join(root, f'Features/{args.person}/landmarks68-512')
