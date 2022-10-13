@@ -9,14 +9,17 @@ n_epoches: 1000
 learning_rate: 1.0e-4
 optimizer: Adam
 loss: MSELoss
+input_ndim: 13
+output_ndim: 136
 
 save_path: 'results/MEAD_A13L68'
 save_epoch: 100
 
 use_pretrain: False
 pretrain_path: 'results/MEAD_A13L68/backups/epoch_000600.pt'
+
+export_vid2vid: False
 driving_path: 'results/imaginaire/datasets256/driving'
 reference_path: 'results/imaginaire/datasets256/reference'
 
-input_ndim: 13
-output_ndim: 136
+calculate_lmd: True

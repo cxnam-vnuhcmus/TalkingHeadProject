@@ -20,10 +20,10 @@ mp_face_detection = mp.solutions.face_detection
 mp_drawing = mp.solutions.drawing_utils
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--person", type=str, default='M030')
+parser.add_argument("--person", type=str, default='M003')
 parser.add_argument("--extract_audio", type=bool, default=False)
 parser.add_argument("--extract_images", type=bool, default=False)
-parser.add_argument("--extract_lm68", type=bool, default=True)
+parser.add_argument("--extract_lm68", type=bool, default=False)
 parser.add_argument("--extract_lm74", type=bool, default=True)
 
 if __name__ == '__main__':
@@ -36,7 +36,7 @@ if __name__ == '__main__':
         os.makedirs(outputFolder, exist_ok=True)
         filelist = sorted(glob(join(inputFolder, '**/*.mp4'), recursive=True))
 
-        for idx, filename in tqdm(enumerate(filelist)):
+        for filename in tqdm(filelist):
             subPath = filename[len(inputFolder)+1:-len('.mp4')-4]
             num = int(filename[-len('.mp4')-3:-len('.mp4')])
             
@@ -56,7 +56,7 @@ if __name__ == '__main__':
         os.makedirs(outputFolder, exist_ok=True)
         filelist = sorted(glob(join(inputFolder,'**/*.mp4'), recursive=True))
 
-        for idx, filename in tqdm(enumerate(filelist)):
+        for filename in tqdm(filelist):
             subPath = filename[len(inputFolder)+1:-len('.mp4')-4]
             num = int(filename[-len('.mp4')-3:-len('.mp4')])           
             
@@ -84,7 +84,7 @@ if __name__ == '__main__':
         os.makedirs(outputFolder, exist_ok=True)
         filelist = sorted(glob(join(inputFolder,'**/*.jpeg'), recursive=True))
 
-        for idx, filename in tqdm(enumerate(filelist)):
+        for filename in tqdm(filelist):
             subPath = filename[len(inputFolder)+1:-len('.jpeg')-5]
             num = int(filename[-len('.jpeg')-4:-len('.jpeg')])           
             
@@ -103,7 +103,7 @@ if __name__ == '__main__':
         os.makedirs(outputFolder, exist_ok=True)
         filelist = sorted(glob(join(inputFolder,'**/*.jpeg'), recursive=True))
 
-        for idx, filename in tqdm(enumerate(filelist)):
+        for filename in tqdm(filelist):
             subPath = filename[len(inputFolder)+1:-len('.jpeg')-5]
             num = int(filename[-len('.jpeg')-4:-len('.jpeg')])           
             
@@ -111,7 +111,8 @@ if __name__ == '__main__':
             os.makedirs(outputPath, exist_ok=True) 
             
             img = cv2.imread(filename)
-
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            
             with mp_face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.8) as face_detection:
                 results = face_detection.process(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
                 if results.detections:
@@ -124,11 +125,11 @@ if __name__ == '__main__':
                     
                     detection = results.detections[index_detection]
                     bb = detection.location_data.relative_bounding_box
-                    xmin = int(bb.xmin*img.shape[1]) - 10
-                    ymin = int(bb.ymin*img.shape[0]) - 10
+                    xmin = int(bb.xmin*img.shape[1]) - 50
+                    ymin = int(bb.ymin*img.shape[0]) - 50
                     width, height = int(bb.width*img.shape[1]), int(bb.height*img.shape[0])
-                    xmax = int(bb.xmin*img.shape[1]) + width + 10
-                    ymax = int(bb.ymin*img.shape[0]) + height + 10
+                    xmax = int(bb.xmin*img.shape[1]) + width + 50
+                    ymax = int(bb.ymin*img.shape[0]) + height + 50
                     face = img[ymin:ymax, xmin:xmax].copy()
                     
                     kp_list = []

@@ -34,6 +34,7 @@ class Dataset_MEAD_A13L68(Dataset):
                 lm_data = json.load(f)
             lm_data_list.append([lm_data])
         lm_data_list = np.vstack(lm_data_list).astype(np.float32)
+        lm_data_list = lm_data_list.reshape(*lm_data_list.shape[0:-2], -1)
         return mfcc_data_list, lm_data_list
 
     def __len__(self):

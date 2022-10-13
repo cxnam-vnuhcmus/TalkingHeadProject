@@ -167,7 +167,7 @@ data:
     train:        
         roots:
             - datasets512/train
-        batch_size: 3
+        batch_size: 1
         initial_sequence_length: 4
         max_sequence_length: 16        
         augmentations:

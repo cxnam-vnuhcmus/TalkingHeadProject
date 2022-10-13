@@ -1,5 +1,5 @@
 import sys
-sys.path.append('..')
+sys.path.append('.')
 
 import torch
 import argparse
@@ -9,7 +9,7 @@ from model.model_import import *
 import time
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--config_file', type=str, default='/root/TalkingHead/config/config_MEAD_A13L74.yaml')
+parser.add_argument('--config_file', type=str, default='/root/TalkingHead/config/config_MEAD_A13L68.yaml')
 args = parser.parse_args()
 
 if __name__ == '__main__': 
@@ -35,7 +35,7 @@ if __name__ == '__main__':
             counter += 1
             # start_time = time.time() 
 
-            y = y.reshape(*y.shape[0:2], -1)
+            # y = y.reshape(*y.shape[0:2], -1)
             x, y = x.cuda(), y.cuda()
             pred = model(x)
 
