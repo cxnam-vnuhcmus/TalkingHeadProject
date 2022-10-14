@@ -118,11 +118,11 @@ if __name__ == '__main__':
         inputFolder = join(root, f'Features/{args.person}/images512')
         outputFolder = join(root, f'Features/{args.person}/landmarks68-512')
         os.makedirs(outputFolder, exist_ok=True)
-        filelist = sorted(glob(join(inputFolder,'**/*.jpeg'), recursive=True))
+        filelist = sorted(glob(join(inputFolder,'**/*.jpg'), recursive=True))
 
         for filename in tqdm(filelist):
-            subPath = filename[len(inputFolder)+1:-len('.jpeg')-5]
-            num = int(filename[-len('.jpeg')-4:-len('.jpeg')])           
+            subPath = filename[len(inputFolder)+1:-len('.jpg')-5]
+            num = int(filename[-len('.jpg')-4:-len('.jpg')])           
             
             outputPath = join(root, outputFolder, subPath)
             os.makedirs(outputPath, exist_ok=True) 
@@ -137,11 +137,11 @@ if __name__ == '__main__':
         inputFolder = join(root, f'Features/{args.person}/images512')
         outputFolder = join(root, f'Features/{args.person}/landmarks74-512')
         os.makedirs(outputFolder, exist_ok=True)
-        filelist = sorted(glob(join(inputFolder,'**/*.jpeg'), recursive=True))
+        filelist = sorted(glob(join(inputFolder,'**/*.jpg'), recursive=True))
 
         for filename in tqdm(filelist):
-            subPath = filename[len(inputFolder)+1:-len('.jpeg')-5]
-            num = int(filename[-len('.jpeg')-4:-len('.jpeg')])           
+            subPath = filename[len(inputFolder)+1:-len('.jpg')-5]
+            num = int(filename[-len('.jpg')-4:-len('.jpg')])           
             
             outputPath = join(root, outputFolder, subPath)
             os.makedirs(outputPath, exist_ok=True) 

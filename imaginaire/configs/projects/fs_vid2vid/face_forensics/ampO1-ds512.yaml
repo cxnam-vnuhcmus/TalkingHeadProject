@@ -140,7 +140,7 @@ data:
     num_workers: 4
     input_types:
         - images:
-            ext: jpeg
+            ext: jpg
             num_channels: 3
             normalize: True
         - landmarks-dlib68:
@@ -190,6 +190,7 @@ inference_args:
     few_shot_seq_index: 0
     few_shot_frame_index: 0
     driving_seq_index: 1
+    save_fake_only: False
 
 test_data:
     name: 'face_forensics'
@@ -202,7 +203,7 @@ test_data:
         normalize_momentum: 0.9
     input_types:
         - images:
-            ext: jpeg
+            ext: jpg
             num_channels: 3
             normalize: True
         - landmarks-dlib68:

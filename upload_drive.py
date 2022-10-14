@@ -5,10 +5,10 @@ gauth = GoogleAuth()
 gauth.CommandLineAuth()      
 drive = GoogleDrive(gauth)  
 
-upload_file_list = ['/root/TalkingHead/results/MEAD_A13L74/best_model.pt']
+upload_file_list = ['/root/TalkingHead/imaginaire/logs/2022_1012_1625_20_ampO1-ds512/epoch_00066_iteration_000070000_checkpoint.pt']
 for upload_file in upload_file_list:
 	gfile = drive.CreateFile({'parents': [{'id': '1CA_1Kz6-eEpdwBciY1JxAZxHBtB2FgiE'}],
-    'title': 'a13l74_256_best_model.pt'
+    'title': 'epoch_00066_iteration_000070000_checkpoint_512.pt'
     })
 	# Read file and set it as the content of this instance.
 	gfile.SetContentFile(upload_file)

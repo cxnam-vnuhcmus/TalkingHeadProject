@@ -3,6 +3,10 @@ from evaluation.fid import FidScore
 import cpbd
 from math import log10, sqrt
 import numpy as np
+from glob import glob
+from tqdm import tqdm
+import cv2
+import os
 
 def calculate_ssim(image1, image2, channel_axis=None):
     r"""Compute Structural Similarity Index Measure
@@ -51,3 +55,27 @@ def calculate_cpbd(image_grayscale):
         CPBD            :   float (↑)
     """  
     return cpbd.compute(image_grayscale)
+
+def calculate_folder_image(folderA, folderB, eval_ssim=False, eval_fid=False, eval_psnr=False):
+    total_ssim = 0
+    total_fid = 0
+    total_psnr = 0
+    folderA_size = len(glob(os.path.join(folderA, '*.jpg'), recursive=True))
+    for imageA_path in tqdm(glob(os.path.join(folderA, '*.jpg'), recursive=True)):
+        imageB_path = os.path.join(folderB, imageA_path.split('/')[-1])
+        imageA = cv2.imread(imageA_path)
+        imageB = cv2.imread(imageB_path)
+        
+        if eval_ssim:
+            ssim = calculate_ssim(imageA, imageB, channel_axis=2)
+            total_ssim = total_ssim + ssim
+        if eval_fid:
+            fid = calculate_fid(imageA, imageB, dims=192)
+            total_fid = total_fid + fid
+        if eval_psnr:
+            psnr = calculate_psnr(imageA, imageB)
+            total_psnr = total_psnr + psnr
+    
+    return {"ssim": total_ssim/folderA_size,
+            "fid": total_fid/folderA_size,
+            "psnr": total_psnr/folderA_size,}

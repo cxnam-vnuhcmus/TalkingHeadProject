@@ -16,7 +16,7 @@ from evaluation.evaluation_landmark import *
 parser = argparse.ArgumentParser()
 parser.add_argument('--config_file', type=str, default='/root/TalkingHead/config/config_MEAD_A13L68.yaml')
 parser.add_argument('--mfcc_folder', type=str, default='/root/Datasets/Features/M003/mfcc/neutral/level_1/00001')
-parser.add_argument('--landmark_folder', type=str, default='/root/Datasets/Features/M003/landmarks/neutral/level_1/00001')
+parser.add_argument('--landmark_folder', type=str, default='/root/Datasets/Features/M003/landmarks68-512/neutral/level_1/00001')
 args = parser.parse_args()
 
 if __name__ == '__main__': 

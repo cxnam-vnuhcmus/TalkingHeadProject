@@ -10,11 +10,13 @@ def calculate_LMD(pred_landmark, gt_landmark, norm_distance=1.0):
     Returns:
         LMD            :   float (↓)
     """
-    euclidean_distance = np.sqrt(np.sum((pred_landmark - gt_landmark)**2, axis=3))
-    norm_per_frame = np.mean(euclidean_distance, axis=2)
+    euclidean_distance = np.sqrt(np.sum((pred_landmark - gt_landmark)**2, axis=(7 - pred_landmark.ndim)))
+    norm_per_frame = np.mean(euclidean_distance, axis=(4 - pred_landmark.ndim))
     norm_per_frame_norm = np.divide(norm_per_frame, norm_distance)
-    norm_per_batch = np.mean(norm_per_frame_norm, axis=1)
-    norm_all_batch = np.mean(norm_per_batch, axis=0)
+    if (3 - pred_landmark.ndim) > 0:
+        norm_per_batch = np.mean(norm_per_frame_norm, axis=1)
+    if (2 - pred_landmark.ndim) > 0:
+        norm_all_batch = np.mean(norm_per_batch, axis=0)
     return norm_all_batch
 
 def calculate_LMV(pred_landmark, gt_landmark, norm_distance=1.0):
@@ -35,3 +37,4 @@ def calculate_LMV(pred_landmark, gt_landmark, norm_distance=1.0):
     norm_per_batch = np.mean(norm_per_frame_norm, axis=1)
     norm_all_batch = np.mean(norm_per_batch, axis=0)
     return norm_all_batch
+

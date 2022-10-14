@@ -41,15 +41,16 @@ if __name__ == '__main__':
 
     ax = fig.add_subplot(1, 3, 3)
     img2 = image.copy()
+    pixel_size = 2
     for p in pred_data :
         if 'bb' in data:
             p[1] = p[1] + data['bb'][1]  
             p[0] = p[0] + data['bb'][0]
-        img2[p[1]-1:p[1]+1, p[0]-1:p[0]+1, :] = (0, 255, 0)
+        img2[p[1]-pixel_size:p[1]+pixel_size, p[0]-pixel_size:p[0]+pixel_size, :] = (0, 255, 0)
     for p in gt_data :
         if 'bb' in data:
             p[1] = p[1] + data['bb'][1]  
             p[0] = p[0] + data['bb'][0]
-        img2[p[1]-1:p[1]+1, p[0]-1:p[0]+1, :] = (255, 0, 0)
+        img2[p[1]-pixel_size:p[1]+pixel_size, p[0]-pixel_size:p[0]+pixel_size, :] = (255, 0, 0)
     ax.imshow(img2)
     plt.show()
