@@ -16,7 +16,7 @@ if __name__ == '__main__':
     lm_path = args.pred_lm_path
     index = args.frame_index
 
-    image = cv2.imread(f'{image_path }/{index+1:05d}.jpeg')
+    image = cv2.imread(f'{image_path }/{index+1:05d}.jpg')
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     image = np.asarray(image)
 

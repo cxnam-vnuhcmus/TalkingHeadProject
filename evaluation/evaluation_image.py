@@ -57,25 +57,26 @@ def calculate_cpbd(image_grayscale):
     return cpbd.compute(image_grayscale)
 
 def calculate_folder_image(folderA, folderB, eval_ssim=False, eval_fid=False, eval_psnr=False):
-    total_ssim = 0
-    total_fid = 0
-    total_psnr = 0
-    folderA_size = len(glob(os.path.join(folderA, '*.jpg'), recursive=True))
+    list_ssim = []
+    list_fid = []
+    list_psnr = []
+    # folderA_size = len(glob(os.path.join(folderA, '*.jpg'), recursive=True))
     for imageA_path in tqdm(glob(os.path.join(folderA, '*.jpg'), recursive=True)):
         imageB_path = os.path.join(folderB, imageA_path.split('/')[-1])
-        imageA = cv2.imread(imageA_path)
-        imageB = cv2.imread(imageB_path)
-        
-        if eval_ssim:
-            ssim = calculate_ssim(imageA, imageB, channel_axis=2)
-            total_ssim = total_ssim + ssim
-        if eval_fid:
-            fid = calculate_fid(imageA, imageB, dims=192)
-            total_fid = total_fid + fid
-        if eval_psnr:
-            psnr = calculate_psnr(imageA, imageB)
-            total_psnr = total_psnr + psnr
+        if os.path.exists(imageB_path):
+            imageA = cv2.imread(imageA_path)
+            imageB = cv2.imread(imageB_path)
+            
+            if eval_ssim:
+                ssim = calculate_ssim(imageA, imageB, channel_axis=2)
+                list_ssim.append(ssim)
+            if eval_fid:
+                fid = calculate_fid(imageA, imageB, dims=192)
+                list_fid.append(fid)
+            if eval_psnr:
+                psnr = calculate_psnr(imageA, imageB)
+                list_psnr.append(psnr)
     
-    return {"ssim": total_ssim/folderA_size,
-            "fid": total_fid/folderA_size,
-            "psnr": total_psnr/folderA_size,}
+    return {"ssim": sum(list_ssim)/len(list_ssim),
+            "fid": sum(list_fid)/len(list_fid),
+            "psnr": sum(list_psnr)/len(list_psnr),}

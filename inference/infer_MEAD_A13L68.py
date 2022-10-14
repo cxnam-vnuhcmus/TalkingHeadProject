@@ -51,7 +51,7 @@ if __name__ == '__main__':
                         "gt": y.reshape(*y.shape[0:-1], 68, 2).tolist()
                     }
    
-    print(f"Image path: {mfcc_path.replace('mfcc', 'images')}")
+    print(f"Image path: {mfcc_path.replace('mfcc', 'images512')}")
     save_path = join(config['save_path'],'lm_pred.json')
     print(f'Save predict landmark to: {save_path}')
     with open(save_path, 'w') as f:
@@ -66,8 +66,8 @@ if __name__ == '__main__':
         os.makedirs(driving_lm_path, exist_ok=True)
         os.makedirs(driving_gtlm_path, exist_ok=True)
         
-        img_path = mfcc_path.replace('mfcc','images')
-        cmd = f'cp -r {img_path}/*.jpeg {driving_image_path}'
+        img_path = mfcc_path.replace('mfcc','images512')
+        cmd = f'cp -r {img_path}/*.jpg {driving_image_path}'
         subprocess.call(cmd, shell=True)
         
         cmd = f'cp -r {lm_path}/*.json {driving_gtlm_path}'

@@ -66,12 +66,17 @@ if __name__ == '__main__':
         os.makedirs(driving_lm_path, exist_ok=True)
         os.makedirs(driving_gtlm_path, exist_ok=True)
         
-        img_path = mfcc_path.replace('mfcc','images')
-        cmd = f'cp -r {img_path}/*.jpeg {driving_image_path}'
+        img_path = mfcc_path.replace('mfcc','images512')
+        cmd = f'cp -r {img_path}/*.jpg {driving_image_path}'
         subprocess.call(cmd, shell=True)
         
-        cmd = f'cp -r {lm_path}/*.json {driving_gtlm_path}'
-        subprocess.call(cmd, shell=True)
+        for lm in glob(join(lm_path, '*.json')):
+            with open(lm, 'r') as f:
+                lm_data = json.load(f)
+            with open(join(driving_gtlm_path, lm.split('/')[-1]), 'w') as f:
+                json.dump(lm_data['lm68'], f)
+        # cmd = f'cp -r {lm_path}/*.json {driving_gtlm_path}'
+        # subprocess.call(cmd, shell=True)
 
         pred = pred.squeeze(0).to(torch.int16)
         for index in range(pred.shape[0]):

@@ -18,7 +18,7 @@ save_epoch: 100
 use_pretrain: False
 pretrain_path: 'results/MEAD_A13L74/best_model.pt'
 
-export_vid2vid: False
+export_vid2vid: True
 driving_path: 'results/imaginaire/MEAD_A13L74/driving'
 reference_path: 'results/imaginaire/MEAD_A13L74/reference'
 
