@@ -77,11 +77,13 @@ if __name__ == '__main__':
             outputGtPath = join(driving_gtlm_path, f'{index+1:05d}.json')
             with open(outputGtPath, 'w') as f:  
                 point = y[index].reshape(68,2)
-                final_data = point + np.asarray([bb_list[index][0:2]])
+                reverse_point = (point / np.asarray(256/(bb_list[index][2] - bb_list[index][0]))).to(torch.int16)
+                final_data = reverse_point + np.asarray([bb_list[index][0:2]])
                 json.dump(final_data.tolist(), f)
                 
             outputPath = join(driving_lm_path, f'{index+1:05d}.json')
             with open(outputPath, 'w') as f:  
                 point = pred[index].reshape(68,2)
-                final_data = point + np.asarray([bb_list[index][0:2]])
+                reverse_point = (point / np.asarray(256/(bb_list[index][2] - bb_list[index][0]))).to(torch.int16)
+                final_data = reverse_point + np.asarray([bb_list[index][0:2]])
                 json.dump(final_data.tolist(), f)

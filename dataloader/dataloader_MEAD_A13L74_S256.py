@@ -5,7 +5,7 @@ import torch
 from glob import glob
 from os.path import join
 
-class Dataset_MEAD_A13L74(Dataset):
+class Dataset_MEAD_A13L74_S256(Dataset):
     def __init__(self, path):
         self.data_path = []
         with open(path, 'r') as f:
@@ -34,7 +34,8 @@ class Dataset_MEAD_A13L74(Dataset):
         for lm_file in lm_list:
             with open(lm_file, 'r') as f:
                 data = json.load(f)
-                lm_data = data['lm68']
+                # lm_data = data['lm68']
+                lm_data = data['lm68'] * np.asarray(256/(data['bb'][2] - data['bb'][0]))
                 bb_list.append(data['bb'])
             lm_data_list.append([lm_data])
         lm_data_list = np.vstack(lm_data_list).astype(np.float32)
@@ -44,14 +45,14 @@ class Dataset_MEAD_A13L74(Dataset):
     def __len__(self):
         return len(self.data_path)
 
-class DataLoader_MEAD_A13L74(DataLoader):
+class DataLoader_MEAD_A13L74_S256(DataLoader):
     def __init__(self, config, is_train=True):
         self.config = config
         dataset_path = config['test_dataset_path']
         if is_train:
             dataset_path = config['train_dataset_path']
-        self.dataset = Dataset_MEAD_A13L74(dataset_path)
-        super(DataLoader_MEAD_A13L74, self).__init__(self.dataset,
+        self.dataset = Dataset_MEAD_A13L74_S256(dataset_path)
+        super(DataLoader_MEAD_A13L74_S256, self).__init__(self.dataset,
                                 batch_size=config['batch_size'],
                                 num_workers=config['num_workers'],
                                 shuffle=True,

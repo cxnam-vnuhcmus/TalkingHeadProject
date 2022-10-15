@@ -53,22 +53,25 @@ def calculate_folder_landmark(folderA, folderB, eval_lmd=True, eval_lmv=True):
     total_lmd = 0
     total_lmv = 0
     if eval_lmd:
-        list_lmd = []
+        lmA_list = []
+        lmB_list = []
         folderA_data = glob(os.path.join(folderA, '**/*.json'), recursive=True)
         for lmA_path in tqdm(folderA_data):
             lmB_path = lmA_path.replace(folderA, folderB)
             if os.path.exists(lmB_path):
                 with open(lmA_path, 'r') as f:
-                    lmA = np.asarray(json.load(f))
+                    lmA = json.load(f)
+                    lmA_list.append(lmA)
                 with open(lmB_path, 'r') as f:
                     lmB_data = json.load(f)
                     if isinstance(lmB_data, dict) and 'lm68' in lmB_data:
                         lmB_data = lmB_data['lm68']
-                    lmB = np.asarray(lmB_data)            
-                norm_distance = np.sqrt(np.sum((lmB[0] - lmB[16])**2, axis=0))
-                lmd = calculate_LMD(lmB, lmA, norm_distance=norm_distance)
-                list_lmd.append(lmd)
-        total_lmd = sum(list_lmd)/len(list_lmd)
+                    lmB = lmB_data
+                    lmB_list.append(lmB)     
+        lmA_list = np.asarray(lmA_list)
+        lmB_list = np.asarray(lmB_list) 
+        norm_distance = np.sqrt(np.sum((lmB_list[:,0] - lmB_list[:,16])**2, axis=1))
+        total_lmd = calculate_LMD(lmA_list, lmB_list,norm_distance=norm_distance)
     if eval_lmv:
         list_lmv = []
         folderA_data = glob(os.path.join(folderA, '**/*.json'), recursive=True)

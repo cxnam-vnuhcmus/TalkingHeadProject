@@ -3,33 +3,33 @@ import numpy as np
 import matplotlib.pyplot as plt
 import argparse
 import json
-from evaluation.evaluation_landmark import calculate_LMD
+import os
+from evaluation.evaluation_landmark import calculate_LMD, calculate_LMV
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--image_path', type=str, default='../Datasets/Features/M003/images/neutral/level_1/00001')
-parser.add_argument('--pred_lm_path', type=str, default='results/MEAD_A13L68/lm_pred.json')
+parser.add_argument('--image_path', type=str, default='results/imaginaire/MEAD_A13L74_S256/driving/images')
+parser.add_argument('--pred_lm_path', type=str, default='results/imaginaire/MEAD_A13L74_S256/driving/landmarks-dlib68')
+parser.add_argument('--gt_lm_path', type=str, default='results/imaginaire/MEAD_A13L74_S256/driving/gt-landmarks-dlib68')
 parser.add_argument('--frame_index', type=int, default=0)
 args = parser.parse_args()
 
 if __name__ == '__main__': 
-    image_path = args.image_path
-    lm_path = args.pred_lm_path
     index = args.frame_index
+    image_path = os.path.join(args.image_path, f'{index+1:05d}.jpg')
+    lm_path = os.path.join(args.pred_lm_path, f'{index+1:05d}.json')
+    gt_path = os.path.join(args.gt_lm_path, f'{index+1:05d}.json')
 
-    image = cv2.imread(f'{image_path }/{index+1:05d}.jpg')
+    image = cv2.imread(image_path)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     image = np.asarray(image)
 
     with open(lm_path, 'r') as f:
-        data = json.load(f)
+        pred_data = np.asarray(json.load(f))
+    with open(gt_path, 'r') as f:
+        gt_data = np.asarray(json.load(f))
     
-    pred_list = np.asarray([data['pred']])
-    gt_list = np.asarray([data['gt']])
-    pred_data = pred_list[0][index]
-    gt_data = gt_list[0][index]
-    
-    norm_distance = np.sqrt(np.sum((gt_list[0:1,index:index+1,0] - gt_list[0:1,index:index+1,16])**2, axis=2))
-    lmd = calculate_LMD(pred_list[0:1,index:index+1], gt_list[0:1,index:index+1],norm_distance=norm_distance)
+    norm_distance = np.sqrt(np.sum((gt_data[0] - gt_data[16])**2, axis=0))
+    lmd = calculate_LMD(pred_data, gt_data, norm_distance=norm_distance)
     print(f'LMD frame ({index}): {lmd}')
     
     fig = plt.figure(figsize=(15, 5))
@@ -43,14 +43,8 @@ if __name__ == '__main__':
     img2 = image.copy()
     pixel_size = 2
     for p in pred_data :
-        if 'bb' in data:
-            p[1] = p[1] + data['bb'][1]  
-            p[0] = p[0] + data['bb'][0]
         img2[p[1]-pixel_size:p[1]+pixel_size, p[0]-pixel_size:p[0]+pixel_size, :] = (0, 255, 0)
     for p in gt_data :
-        if 'bb' in data:
-            p[1] = p[1] + data['bb'][1]  
-            p[0] = p[0] + data['bb'][0]
         img2[p[1]-pixel_size:p[1]+pixel_size, p[0]-pixel_size:p[0]+pixel_size, :] = (255, 0, 0)
     ax.imshow(img2)
     plt.show()
