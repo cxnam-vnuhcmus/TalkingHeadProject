@@ -16,7 +16,7 @@ from evaluation.evaluation_landmark import *
 parser = argparse.ArgumentParser()
 parser.add_argument('--config_file', type=str, default='/root/TalkingHead/config/config_MEAD_A13L74.yaml')
 parser.add_argument('--mfcc_folder', type=str, default='/root/Datasets/Features/M003/mfcc/neutral/level_1/00001')
-parser.add_argument('--landmark_folder', type=str, default='/root/Datasets/Features/M003/landmarks74/neutral/level_1/00001')
+parser.add_argument('--landmark_folder', type=str, default='/root/Datasets/Features/M003/landmarks74-512/neutral/level_1/00001')
 args = parser.parse_args()
 
 if __name__ == '__main__': 
@@ -51,7 +51,7 @@ if __name__ == '__main__':
                         "bb": bb
                     }
    
-    print(f"Image path: {mfcc_path.replace('mfcc', 'images')}")
+    print(f"Image path: {mfcc_path.replace('mfcc', 'images512')}")
     save_path = join(config['save_path'],'lm_pred.json')
     print(f'Save predict landmark to: {save_path}')
     with open(save_path, 'w') as f:
@@ -70,17 +70,26 @@ if __name__ == '__main__':
         cmd = f'cp -r {img_path}/*.jpg {driving_image_path}'
         subprocess.call(cmd, shell=True)
         
-        for lm in glob(join(lm_path, '*.json')):
+        pred = pred.squeeze(0).to(torch.int16)
+        
+        for index, lm in enumerate(sorted(glob(join(lm_path, '*.json')))):
             with open(lm, 'r') as f:
                 lm_data = json.load(f)
             with open(join(driving_gtlm_path, lm.split('/')[-1]), 'w') as f:
-                json.dump(lm_data['lm68'], f)
-        # cmd = f'cp -r {lm_path}/*.json {driving_gtlm_path}'
-        # subprocess.call(cmd, shell=True)
-
-        pred = pred.squeeze(0).to(torch.int16)
-        for index in range(pred.shape[0]):
+                final_lm_data = lm_data['lm68'] + np.asarray([lm_data['bb'][0:2]])
+                json.dump(final_lm_data.tolist(), f)
+                
             outputPath = join(driving_lm_path, f'{index+1:05d}.json')
             with open(outputPath, 'w') as f:  
                 point = pred[index].reshape(68,2)
-                json.dump(point.tolist(), f)
+                final_pred_data = point + np.asarray([lm_data['bb'][0:2]])
+                json.dump(final_pred_data.tolist(), f)
+        # cmd = f'cp -r {lm_path}/*.json {driving_gtlm_path}'
+        # subprocess.call(cmd, shell=True)
+
+        
+        # for index in range(pred.shape[0]):
+        #     outputPath = join(driving_lm_path, f'{index+1:05d}.json')
+        #     with open(outputPath, 'w') as f:  
+        #         point = pred[index].reshape(68,2)
+        #         json.dump(point.tolist(), f)

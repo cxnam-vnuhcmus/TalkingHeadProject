@@ -404,7 +404,8 @@ class Trainer(BaseTrainer):
             save_name = '%04d.jpg' % self.t
         output_filename = os.path.join(output_dir, save_name)
         os.makedirs(output_dir, exist_ok=True)
-        imageio.imwrite(output_filename, image_grid)
+        # imageio.imwrite(output_filename, image_grid)
+        imageio.imwrite(output_filename, tensor2im(self.net_G_output['fake_images'])[0])
         self.t += 1
 
         return image_grid

@@ -61,7 +61,10 @@ def calculate_folder_landmark(folderA, folderB, eval_lmd=True, eval_lmv=True):
                 with open(lmA_path, 'r') as f:
                     lmA = np.asarray(json.load(f))
                 with open(lmB_path, 'r') as f:
-                    lmB = np.asarray(json.load(f))            
+                    lmB_data = json.load(f)
+                    if isinstance(lmB_data, dict) and 'lm68' in lmB_data:
+                        lmB_data = lmB_data['lm68']
+                    lmB = np.asarray(lmB_data)            
                 norm_distance = np.sqrt(np.sum((lmB[0] - lmB[16])**2, axis=0))
                 lmd = calculate_LMD(lmB, lmA, norm_distance=norm_distance)
                 list_lmd.append(lmd)

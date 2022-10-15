@@ -190,7 +190,7 @@ inference_args:
     few_shot_seq_index: 0
     few_shot_frame_index: 0
     driving_seq_index: 1
-    save_fake_only: True
+    save_fake_only: False
 
 test_data:
     name: 'face_forensics'
@@ -232,8 +232,8 @@ test_data:
     test:
         is_lmdb: False
         roots:            
-            - ../results/imaginaire/MEAD_A13L68/reference
-            - ../results/imaginaire/MEAD_A13L68/driving
+            - ../results/imaginaire/MEAD_A13L74/reference
+            - ../results/imaginaire/MEAD_A13L74/driving
         batch_size: 1        
         augmentations:            
             resize_smallest_side: 1024
