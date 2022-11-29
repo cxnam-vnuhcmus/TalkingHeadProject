@@ -9,7 +9,7 @@ from model.model_import import *
 import time
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--config_file', type=str, default='/root/TalkingHead/config/config_MEAD_A13L68.yaml')
+parser.add_argument('--config_file', type=str, default='/root/TalkingHead/config/config_MEAD_A13L74_S256.yaml')
 args = parser.parse_args()
 
 if __name__ == '__main__': 

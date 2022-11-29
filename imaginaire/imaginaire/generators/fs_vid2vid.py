@@ -595,6 +595,7 @@ class WeightGenerator(nn.Module):
                         self.get_norm_weights(feat, i)
                     embedding_weights.append(embedding_weight)
                     norm_weights.append(norm_weight)
+                    
                 if self.use_hyper_conv:
                     feat = encoded_ref[min(len(encoded_ref) - 1, i)]
                     conv_weights.append(self.get_conv_weights(feat, i))
@@ -676,7 +677,7 @@ class WeightGenerator(nn.Module):
                 conv_label = getattr(self, 'ref_label_up_' + str(i))(
                     encoded_ref_label[-1])
                 encoded_ref_label.append(conv_label)
-
+        
         if self.mul_ref_label:
             encoded_ref = []
             for i in range(len(encoded_image_ref)):
@@ -691,7 +692,7 @@ class WeightGenerator(nn.Module):
         else:
             encoded_ref = encoded_image_ref
         encoded_ref = encoded_ref[::-1]
-
+        
         return x, encoded_ref, atn, atn_vis, ref_idx
 
     def get_norm_weights(self, x, i):
@@ -718,7 +719,7 @@ class WeightGenerator(nn.Module):
         b = x.size(0)
         weight_reshaper = WeightReshaper()
         x = weight_reshaper.reshape_embed_input(x)
-
+        
         # Weights for the label embedding network.
         embedding_weights = None
         if self.use_hyper_embed:
@@ -730,7 +731,6 @@ class WeightGenerator(nn.Module):
                 weight_shape = [out_ch, in_ch, eks, eks]
             embedding_weights = weight_reshaper.reshape_weight(fc_e,
                                                                weight_shape)
-
         # Weights for the 3 layers in SPADE module: conv_0, conv_1,
         # and shortcut.
         fc_0 = getattr(self, 'fc_spade_0_' + str(i))(x).view(b, -1)

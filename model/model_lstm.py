@@ -37,6 +37,7 @@ class Model_LSTM(Model_TalkingHead):
     #input shape (bs, no.frame, no.feature)
     def forward(self, x):
         self.step += 1
+        
         bs, _ , ndim = x.shape
         x = x.view(-1, ndim)
         x = self.fc1(x)  

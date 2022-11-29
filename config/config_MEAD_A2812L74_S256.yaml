@@ -1,0 +1,25 @@
+dataloader_name: DataLoader_MEAD_A2812L74_S256
+train_dataset_path: 'dataset/train_MEAD_A13L74.json'
+test_dataset_path: 'dataset/test_MEAD_A13L74.json'
+batch_size: 1
+num_workers: 1
+
+model_name: Model_LSTM
+n_epoches: 1000
+learning_rate: 1.0e-4
+optimizer: Adam
+loss: MSELoss
+input_ndim: 336
+output_ndim: 136
+
+save_path: 'results/MEAD_A2812L74_S256'
+save_epoch: 100
+
+use_pretrain: False
+pretrain_path: 'results/MEAD_A2812L74_S256/best_model.pt'
+
+export_vid2vid: True
+driving_path: 'results/imaginaire/MEAD_A2812L74_S256/driving'
+reference_path: 'results/imaginaire/MEAD_A2812L74_S256/reference'
+
+calculate_lmd: True

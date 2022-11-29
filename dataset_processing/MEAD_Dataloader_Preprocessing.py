@@ -6,10 +6,10 @@ import argparse
 from glob import glob
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--person", type=str, default='M030')
+parser.add_argument("--person", type=str, default='M003')
 parser.add_argument("--mead_feature_folder", type=str, default='/root/Datasets/Features')
 parser.add_argument("--output_folder", type=str, default='/root/TalkingHead/dataset')
-parser.add_argument("--parse_MEAD_A13L68", type=bool, default=True)
+parser.add_argument("--parse_MEAD_A13L68", type=bool, default=False)
 parser.add_argument("--parse_MEAD_A13L74", type=bool, default=True)
 
 if __name__ == '__main__':
@@ -44,11 +44,11 @@ if __name__ == '__main__':
             
     if args.parse_MEAD_A13L74:
         os.makedirs(args.output_folder, exist_ok=True)
-        train_file = join(args.output_folder, 'train_MEAD_A13L74.json')
-        test_file = join(args.output_folder, 'test_MEAD_A13L74.json')
+        train_file = join(args.output_folder, 'train_MEAD_A2812L74.json')
+        test_file = join(args.output_folder, 'test_MEAD_A2812L74.json')
         
         total_list = []
-        lm_folder = join(args.mead_feature_folder, args.person, 'landmarks74-512')
+        lm_folder = join(args.mead_feature_folder, args.person, 'landmarks74')
         
         total_list = []
         emo_list = sorted(glob(join(lm_folder, '*')))
@@ -57,7 +57,7 @@ if __name__ == '__main__':
             for lv in lv_list:
                 lm_list = sorted(glob(join(lv, '*')))
                 for lm_file in lm_list:
-                    mfcc_file = lm_file.replace('landmarks74-512', 'mfcc')
+                    mfcc_file = lm_file.replace('landmarks74', 'mfccs')
                     total_list.append(f'{mfcc_file}|{lm_file}')
 
         random.seed(0)
