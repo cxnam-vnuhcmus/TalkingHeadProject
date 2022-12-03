@@ -1870,6 +1870,23 @@ class OcclusionAwareGenerator(nn.Module):
     """
     Generator that given source image and and keypoints try to transform image according to movement trajectories
     induced by keypoints. Generator follows Johnson architecture.
+    Input:  source_image = torch.randn(1, 3, 256, 256)
+            kp_driving = {
+                "heatmap": torch.randn(1, 10, 58, 58),
+                "jacobian": torch.randn(1, 10, 2, 2),
+                "value": torch.randn(1, 10, 2)
+            }
+            kp_source = {
+                "heatmap": torch.randn(1, 10, 58, 58),
+                "jacobian": torch.randn(1, 10, 2, 2),
+                "value": torch.randn(1, 10, 2)
+            }
+    Output:
+            mask: torch.Size([1, 11, 64, 64])
+            sparse_deformed: torch.Size([1, 11, 3, 64, 64])
+            occlusion_map: torch.Size([1, 1, 64, 64])
+            deformed: torch.Size([1, 3, 256, 256])
+            prediction: torch.Size([1, 3, 256, 256])
     """
 
     def __init__(self, num_channels, num_kp, block_expansion, max_features, num_down_blocks,
