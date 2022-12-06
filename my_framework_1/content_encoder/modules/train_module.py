@@ -5,6 +5,8 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader
 from dataset import *
 from model import *
+from modules.net_module import *
+import sys
 
 def get_dataset(dataset_name, dataset_path):
     dataset = globals()[dataset_name](dataset_path)
@@ -20,33 +22,60 @@ def get_model(model_name, **model_params):
         model = model.cuda()
     return model
 
-def train(model, dataloader, optimizer, criterion, epoch):
+def train(model, dataloader, optimizer, criterion, epoch, **criterion_params):
     model.train()
     running_loss = 0
-    for i, (x,y) in tqdm(enumerate(dataloader), f"Training epoch {epoch}: ", total=len(dataloader)):
+    for step, (x, y) in enumerate(dataloader):
         if torch.cuda.is_available():
-            x, y = x.cuda(), y.cuda()
-        pred = model(x)
+            for k in x:
+                x[k] = x[k].cuda()
+            y = y.unsqueeze(2).cuda()
+        pred = model(**x)
         
         optimizer.zero_grad()
-        loss = criterion(pred, y)
+        pred = pred.permute(0,1,3,4,2).cpu().detach().numpy()
+        y = y.permute(0,1,3,4,2).cpu().detach().numpy()
+        loss_win = []
+        for i in range(pred.shape[1]):
+            loss_i = np.abs(criterion(pred[0,i], y[0,i], **criterion_params))
+            loss_i = torch.tensor(loss_i, requires_grad=True)
+            loss_win.append(loss_i)
+        loss = torch.stack(loss_win)
+        loss = torch.sum(loss)
         loss.backward()
         optimizer.step()
     
         running_loss += loss.item()
+        msg = f"\r| Step: {step}/{len(dataloader)} of epoch {epoch} | Train Loss: {loss:#.4}"
+        sys.stdout.write(msg)
+        sys.stdout.flush()
     return running_loss / len(dataloader)
 
-def validate(model, dataloader, criterion, epoch):
+def validate(model, dataloader, criterion, epoch, **criterion_params):
     model.eval()
     running_loss = 0
     with torch.no_grad():
-        for i, (x,y) in tqdm(enumerate(dataloader), f"Validate epoch {epoch}: ", total=len(dataloader)):
+        for step, (x,y) in enumerate(dataloader):
             if torch.cuda.is_available():
-                x, y = x.cuda(), y.cuda()
-            pred = model(x)
-
-            loss = criterion(pred, y)        
+                for k in x:
+                    x[k] = x[k].cuda()
+                y = y.unsqueeze(2).cuda()
+            pred = model(**x)
+            
+            pred = pred.permute(0,1,3,4,2).cpu().detach().numpy()
+            y = y.permute(0,1,3,4,2).cpu().detach().numpy()
+            loss_win = []
+            for i in range(pred.shape[1]):
+                loss_i = np.abs(criterion(pred[0,i], y[0,i], **criterion_params))
+                loss_i = torch.tensor(loss_i, requires_grad=True)
+                loss_win.append(loss_i)
+            loss = torch.stack(loss_win)
+            loss = torch.sum(loss)      
+              
             running_loss += loss.item()
+            msg = f"\r| Step: {step}/{len(dataloader)} of epoch {epoch} | Val Loss: {loss:#.4}"
+            sys.stdout.write(msg)
+            sys.stdout.flush()
     return running_loss / len(dataloader)
 
 def save_model(model, epoch, optimizer=None, save_file='.'):

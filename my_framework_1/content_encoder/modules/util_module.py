@@ -571,3 +571,14 @@ class AllAugmentationTransform:
         for t in self.transforms:
             clip = t(clip)
         return clip
+    
+import os
+import imageio
+
+def create_video(video_frames, output_path, fps=25):
+    imageio.mimsave(output_path, video_frames, fps=fps)
+
+def add_audio(video_path, audio_path, output_path):
+    command = 'ffmpeg -i ' + video_path  + ' -i ' + audio_path + ' -vcodec copy  -acodec copy -y  ' + output_path
+    print (command)
+    os.system(command)

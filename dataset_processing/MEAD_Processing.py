@@ -23,12 +23,13 @@ import python_speech_features
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--person", type=str, default='M030')
+parser.add_argument("--person", type=str, default='M003')
 parser.add_argument("--extract_audio", type=bool, default=False)
-parser.add_argument("--extract_images", type=bool, default=True)
+parser.add_argument("--extract_images", type=bool, default=False)
 parser.add_argument("--extract_mfcc13", type=bool, default=True)
 parser.add_argument("--extract_lm68", type=bool, default=False)
 parser.add_argument("--extract_lm74", type=bool, default=True)
+parser.add_argument("--extract_faces", type=bool, default=False)
 
 if __name__ == '__main__':
     args = parser.parse_args()
@@ -71,15 +72,16 @@ if __name__ == '__main__':
             
             clip = mv.VideoFileClip(filename)
             clip = clip.set_fps(25)
-            for i in range(int(clip.duration * clip.fps)):
-                outputFramePath = join(outputPath, f'{(i+1):05d}.jpg')
-                frame = clip.get_frame(i)
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                height = frame.shape[0]
-                x = int(np.floor((frame.shape[1]-height)/2))
-                frame = frame[:, x:x+height]
-                frame = cv2.resize(frame, (512,512), interpolation = cv2.INTER_AREA)
-                cv2.imwrite( outputFramePath, frame)
+            numframes = int(clip.duration * clip.fps)
+            for i,frame in enumerate(clip.iter_frames()):
+                if i <= numframes:
+                    outputFramePath = join(outputPath, f'{(i+1):05d}.jpg')
+                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    height = frame.shape[0]
+                    x = int(np.floor((frame.shape[1]-height)/2))
+                    frame = frame[:, x:x+height]
+                    frame = cv2.resize(frame, (512,512), interpolation = cv2.INTER_AREA)
+                    cv2.imwrite( outputFramePath, frame)
     # if (args.extract_images):
     #     inputFolder = join(root, f'MEAD/{args.person}/video/front')
     #     outputFolder = join(root, f'Features/{args.person}_1/images512')
@@ -239,4 +241,35 @@ if __name__ == '__main__':
                         with open(join(outputPath, f'{num:05d}.json'), 'w') as f:  
                             json.dump(json_data, f)
 
+    if (args.extract_faces):
+        print('==Faces Extraction==')
+        inputFolder = join(root, f'Features/{args.person}/images')
+        outputFolder = join(root, f'Features/{args.person}/faces')
+        os.makedirs(outputFolder, exist_ok=True)
         
+        filelist = sorted(glob(join(inputFolder,'**/*.jpg'), recursive=True))
+
+        for filename in tqdm(filelist):
+            subPath = filename[len(inputFolder)+1:-len('.jpg')-5]
+            num = int(filename[-len('.jpg')-4:-len('.jpg')])           
+            
+            outputPath = join(root, outputFolder, subPath)
+            os.makedirs(outputPath, exist_ok=True) 
+            outputPath = join(outputPath, f'{num:05d}.jpg')
+            
+            img = cv2.imread(filename)
+            image_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            ret, thresh = cv2.threshold(image_gray, 100, 255, cv2.THRESH_BINARY)
+            img = img[:,:,2] * thresh
+            
+            lm_path = filename.replace('images', 'landmarks74')
+            lm_path = lm_path.replace('jpg', 'json')
+            if os.path.exists(lm_path):
+                with open(lm_path, 'rt') as f:
+                    lm_data = json.load(f)
+                    lm_bb = lm_data['bb']
+                img = img[lm_bb[1]:lm_bb[3], lm_bb[0]:lm_bb[2]]
+                img = cv2.resize( img, ( 256, 256 ), interpolation = cv2.INTER_AREA )
+                cv2.imwrite( outputPath, img)
+            
+            

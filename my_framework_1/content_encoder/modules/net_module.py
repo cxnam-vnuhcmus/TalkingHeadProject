@@ -5,11 +5,11 @@ import torch
 import numpy as np
 import cv2
 from torch.nn import BatchNorm2d
-from stylegan2_module import Generator
-
+from .stylegan2_module import Generator
+from .adain_module import adaptive_instance_normalization as adain
 import torch.nn as nn
 import math
-from adain_module import adaptive_instance_normalization as adain
+
 
 # Misc
 img2mse = lambda x, y : torch.mean((x - y) ** 2)
@@ -1509,14 +1509,18 @@ class Emotion_k(nn.Module):
         f = self.layer4(f) #[16, 512, 4, 4]
         f = self.avgpool(f) #[16, 512, 1, 1]
         out = f.squeeze(3).squeeze(2)
+        print(out.shape)
         fake = self.classify(out)
         jacobian = jacobian.reshape(jacobian.shape[0],jacobian.shape[1],4)
         neu_input = torch.cat((value,jacobian),2)
         posi_input = self.embed_fn(neu_input)
         posi_input =posi_input.reshape(posi_input.shape[0],-1)
         ner_feature = self.fc_p(posi_input)
+        print(ner_feature.shape)
         all_fc = torch.unsqueeze(self.fc_all(torch.cat((out,ner_feature),1)),1)
+        print(all_fc.shape)
         result = self.final(all_fc)
+        print(result.shape)
         e_value = result[:,:,:2]
         e_jacobian = result[:,:,2:].reshape(result.shape[0],4,2,2)
         kp = {'value': e_value,'jacobian': e_jacobian}
@@ -2171,3 +2175,68 @@ class KPDetector_a(nn.Module):
 
         return out
   
+class AG_net(nn.Module):
+    def __init__(self):
+        super(AG_net, self).__init__()
+
+        self.audio_eocder = nn.Sequential(
+            conv2d(1,64,3,1,1),
+            conv2d(64,128,3,1,1),
+            nn.MaxPool2d(3, stride=(1,2)),
+            conv2d(128,256,3,1,1),
+            conv2d(256,256,3,1,1),
+            conv2d(256,512,3,1,1),
+            nn.MaxPool2d(3, stride=(2,2))
+            )
+        self.audio_eocder_fc = nn.Sequential(
+            nn.Linear(1024 *12,2048),
+            nn.ReLU(True),
+            nn.Linear(2048,256),
+            nn.ReLU(True),
+
+            )
+        self.lstm = nn.LSTM(256,256,3,batch_first = True)
+    
+        self.decon = nn.Sequential(
+                nn.ConvTranspose2d(256, 256, kernel_size=6, stride=2, padding=1, bias=True),#4,4
+                nn.BatchNorm2d(256),
+                nn.ReLU(True),
+                nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1, bias=True),#8,8
+                nn.BatchNorm2d(128),
+                nn.ReLU(True),
+                nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1, bias=True), #16,16
+                nn.BatchNorm2d(64),
+                nn.ReLU(True),
+                nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1, bias=True),#32,32
+                nn.BatchNorm2d(32),
+                nn.ReLU(True),
+                nn.ConvTranspose2d(32, 16, kernel_size=4, stride=2, padding=1, bias=True),#64,64
+                nn.BatchNorm2d(16),
+                nn.ReLU(True),
+                nn.ConvTranspose2d(16, 8, kernel_size=4, stride=2, padding=1, bias=True),#128,128
+                nn.BatchNorm2d(8),
+                nn.ReLU(True),
+                nn.ConvTranspose2d(8, 1, kernel_size=4, stride=2, padding=1, bias=True),#256,256
+            )
+
+    def forward(self, audio):
+        hidden = ( torch.autograd.Variable(torch.zeros(3, audio.size(0), 256).cuda()),
+                      torch.autograd.Variable(torch.zeros(3, audio.size(0), 256).cuda()))
+        lstm_input = []
+        for step_t in range(audio.size(1)):
+            current_audio = audio[ : ,step_t , :, :].unsqueeze(1)
+            current_feature = self.audio_eocder(current_audio)
+            current_feature = current_feature.view(current_feature.size(0), -1)
+            current_feature = self.audio_eocder_fc(current_feature)
+            features = current_feature
+            lstm_input.append(features)
+        lstm_input = torch.stack(lstm_input, dim = 1)
+        lstm_out, _ = self.lstm(lstm_input, hidden)
+        deco_out = []
+        for step_t in range(audio.size(1)):
+            fc_in = lstm_out[:,step_t,:]
+            fc_feature = torch.unsqueeze(fc_in,2)
+            fc_feature = torch.unsqueeze(fc_feature,3)
+            deco_out.append(self.decon(fc_feature))
+        deco_out = torch.stack(deco_out,dim=1)
+        return deco_out
