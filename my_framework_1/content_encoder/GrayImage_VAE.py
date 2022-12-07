@@ -2,12 +2,12 @@ import json
 import argparse
 import numpy as np
 import sys
+import random
 import torch
 from torch import nn, optim
 from torch.utils.data import Dataset, DataLoader
-from modules.net_module import UNet
-from modules.util_module import read_data_from_path
-from modules.train_module import *
+from modules.net_module import VAE
+from modules.util_module import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--train_dataset_path', type=str, default='data/train_MEAD.json')
@@ -17,9 +17,9 @@ parser.add_argument('--batch_size', type=int, default=10)
 parser.add_argument('--learning_rate', type=float, default=1.0e-4)
 parser.add_argument('--n_epoches', type=int, default=100)
 
-parser.add_argument('--save_best_model_path', type=str, default='result/best_model.pt')
-parser.add_argument('--save_last_model_path', type=str, default='result/last_model.pt')
-parser.add_argument('--save_plot_path', type=str, default='result')
+parser.add_argument('--save_best_model_path', type=str, default='result_GIVAE/best_model.pt')
+parser.add_argument('--save_last_model_path', type=str, default='result_GIVAE/last_model.pt')
+parser.add_argument('--save_plot_path', type=str, default='result_GIVAE')
 parser.add_argument('--use_pretrain', type=bool, default=False)
 args = parser.parse_args()
 
@@ -32,13 +32,18 @@ class FaceDataset(Dataset):
 
     def __getitem__(self, index):
         parts = self.data_path[index].split('|')        
+        # data = read_data_from_path(face_path = parts[2], start=parts[3], end=parts[4])
         data = read_data_from_path(face_path = parts[2])
         return  torch.from_numpy(data['face_data_list'])
 
     def __len__(self):
         return len(self.data_path)
     
-class GrayImageAutoEncoder(UNet):
+    def get_item_path(self, index):
+        parts = self.data_path[index].split('|')
+        return parts[2]
+    
+class GrayImage_VAE(VAE):
     def __init__(self):
         encoder_params = [
             ('same', 1, 64),    #(256,256,64)
@@ -52,13 +57,13 @@ class GrayImageAutoEncoder(UNet):
         ]
         decoder_params = [
             ('up', 512, 512),   #(4,4,512)
-            ('up', 512*2, 512),   #(8,8,512)
-            ('up', 512*2, 512),   #(16,16,512)
-            ('up', 512*2, 256),   #(32,32,256)
-            ('up', 256*2, 128),   #(64,64,128)
-            ('up', 128*2, 64),    #(128,128,64)
-            ('up', 64*2, 64),     #(256,256,64)
-            ('same', 64*2, 1),    #(256,256,1)
+            ('up', 512, 512),   #(8,8,512)
+            ('up', 512, 512),   #(16,16,512)
+            ('up', 512, 256),   #(32,32,256)
+            ('up', 256, 128),   #(64,64,128)
+            ('up', 128, 64),    #(128,128,64)
+            ('up', 64, 64),     #(256,256,64)
+            ('same', 64, 1),    #(256,256,1)
         ]
         super().__init__(encoder_params=encoder_params, decoder_params=decoder_params)
         
@@ -86,11 +91,13 @@ class GrayImageAutoEncoder(UNet):
         return parameters 
         
     def train_all(self):
+        # if torch.cuda.is_available():
+        #     self.cuda()
         #Load pretrain
         current_epoch = 0
         if args.use_pretrain == True:
             current_epoch = load_model(self, self.optimizer) + 1
-            
+        
         train_loss = []
         val_loss = []
         best_running_loss = -1
@@ -121,9 +128,11 @@ class GrayImageAutoEncoder(UNet):
     def train_epoch(self, epoch):
         self.train()
         running_loss = 0
-        for step, x in enumerate(self.train_dataloader):
-            if torch.cuda.is_available():
-                x.cuda()
+        for step, x in enumerate(self.train_dataloader):            
+            # if torch.cuda.is_available():
+            #     x = x.cuda()
+            x = x.reshape(-1,x.shape[2],x.shape[3])
+            x = x.unsqueeze(1)
             pred = self(x)
             
             self.optimizer.zero_grad()
@@ -142,8 +151,10 @@ class GrayImageAutoEncoder(UNet):
         running_loss = 0
         with torch.no_grad():
             for step, x in enumerate(self.val_dataloader):
-                if torch.cuda.is_available():
-                    x.cuda()
+                # if torch.cuda.is_available():
+                #     x = x.cuda()
+                x = x.reshape(-1,x.shape[2],x.shape[3])
+                x = x.unsqueeze(1)
                 pred = self(x)
                 
                 loss = self.criterion(pred, x)      
@@ -154,6 +165,65 @@ class GrayImageAutoEncoder(UNet):
                 sys.stdout.flush()
         return running_loss / len(self.val_dataloader)
     
+    def inference(self):
+        #Load pretrain
+        load_model(self, self.optimizer, save_file=args.save_best_model_path)
+        with torch.no_grad():
+            rand_index = random.choice(range(len(self.val_dataloader)))
+            x = self.val_dataset[rand_index]
+            x = x.unsqueeze(0)
+            if torch.cuda.is_available():
+                x.cuda()
+            pred = self(x)            
+            loss = self.criterion(pred, x)      
+            print(f'Loss: {loss}')
+            import imageio
+            result_img = torch.zeros(pred.shape[0], pred.shape[0]*2)
+            result_img[:,:pred.shape[0]] = pred[0,0]
+            result_img[:,pred.shape[0]:] = x
+            imageio.imsave('result_GIVAE/fake.jpg',result_img)
+            
+    def extract_feature(self, x=None):
+        #Load pretrain
+        load_model(self, self.optimizer, save_file=args.save_best_model_path)
+        with torch.no_grad():
+            if x is None:
+                rand_index = random.choice(range(len(self.val_dataloader)))
+                x = self.val_dataset[rand_index]
+            x = x.unsqueeze(0)
+            print(x.shape)
+            path = self.val_dataset.get_item_path(rand_index)
+        feature = super().extract_feature(x)
+        feature = feature.tolist()
+        with open('result_GIVAE/feature.json','wt') as f:
+            json.dump({'path': path, 'feature': feature}, f)
+            
+    def decoder(self):
+        with torch.no_grad():
+            #Load pretrain
+            load_model(self, self.optimizer, save_file=args.save_best_model_path) + 1
+            with open('result_GIVAE/feature.json','rt') as f:
+                data = json.load(f)
+                feature = data['feature']
+                img_path = os.path.join(data['path'],'00001.jpg')
+            
+            feature = torch.FloatTensor(feature)            
+            image_result = super().decoder(feature)   
+            
+            import imageio
+            raw_image = imageio.imread(img_path)
+            raw_image = raw_image / 255.0    
+            raw_image = torch.from_numpy(raw_image.astype(np.float32))
+            
+            result_img = torch.zeros(raw_image.shape[0], raw_image.shape[0]*2)
+            result_img[:,:raw_image.shape[0]] = image_result[0,0]
+            result_img[:,raw_image.shape[0]:] = raw_image
+            imageio.imsave('result_GIVAE/fake1.jpg',result_img)     
+        return image_result
+            
 if __name__ == '__main__': 
-    net = GrayImageAutoEncoder()
+    net = GrayImage_VAE()
     net.train_all()
+    # net.inference()
+    # net.extract_feature()
+    # net.decoder()

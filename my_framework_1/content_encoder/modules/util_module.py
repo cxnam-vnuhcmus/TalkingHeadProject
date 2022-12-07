@@ -9,6 +9,7 @@ import torch
 from glob import glob
 from os.path import join
 import json
+import matplotlib.pyplot as plt
 
 class LowPassFilter:
   def __init__(self):
@@ -654,3 +655,66 @@ def read_data_from_path(mfcc_path=None, lm_path=None, face_path=None, start=None
         'lm_data_list': lm_data_list, 
         'face_data_list': face_data_list
     }
+    
+def save_model(model, epoch, optimizer=None, save_file='.'):
+    dir_name = os.path.dirname(save_file)
+    os.makedirs(dir_name, exist_ok=True)
+    if optimizer is not None:
+        torch.save({
+            "epoch": epoch,
+            "model_state": model.state_dict(),
+            "optimizer_state": optimizer.state_dict(),
+        }, str(save_file))
+    else:
+        torch.save({
+            "epoch": epoch,
+            "model_state": model.state_dict()
+        }, str(save_file))
+        
+def load_model(model, optimizer=None, save_file='.'):
+    if next(model.parameters()).is_cuda and torch.cuda.is_available():
+        checkpoint = torch.load(save_file, map_location=f'cuda:{torch.cuda.current_device()}')
+    else:
+        checkpoint = torch.load(save_file, map_location='cpu')
+    model.load_state_dict(checkpoint["model_state"])
+
+    if optimizer is not None and "optimizer_state" in checkpoint:
+        optimizer.load_state_dict(checkpoint["optimizer_state"])
+
+    epoch = checkpoint["epoch"]
+    print(f"Load pretrained model at Epoch: {epoch}")
+    return epoch
+
+def save_plots(train_acc, val_acc, train_loss, val_loss, save_path='.'):
+    """
+    Function to save the loss and accuracy plots to disk.
+    """
+    # accuracy plots
+    plt.figure(figsize=(10, 7))
+    plt.plot(
+        train_acc, color='green', linestyle='-', 
+        label='train accuracy'
+    )
+    plt.plot(
+        val_acc, color='blue', linestyle='-', 
+        label='validataion accuracy'
+    )
+    plt.xlabel('Epochs')
+    plt.ylabel('Accuracy')
+    plt.legend()
+    plt.savefig(os.path.join(save_path,'accuracy.png'))
+    
+    # loss plots
+    plt.figure(figsize=(10, 7))
+    plt.plot(
+        train_loss, color='orange', linestyle='-', 
+        label='train loss'
+    )
+    plt.plot(
+        val_loss, color='red', linestyle='-', 
+        label='validataion loss'
+    )
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.savefig(os.path.join(save_path,'loss.png'))

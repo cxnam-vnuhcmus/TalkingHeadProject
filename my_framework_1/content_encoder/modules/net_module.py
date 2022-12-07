@@ -2305,3 +2305,90 @@ class UNet(nn.Module):
             return out_decoder[-1]
         else:
             return out_encoder[-1]
+        
+    def extract_feature(self, x=None):
+        out_encoder = []
+        for layer in self.down_blocks:
+            if len(out_encoder) == 0:
+                out_encoder.append(layer(x))
+            else:
+                out_encoder.append(layer(out_encoder[-1]))
+        return out_encoder[-1]
+    
+    def decoder(self, feature=None, sample_image=None):
+        out_encoder = []
+        for layer in self.down_blocks:
+            if len(out_encoder) == 0:
+                out_encoder.append(layer(sample_image))
+            else:
+                out_encoder.append(layer(out_encoder[-1]))
+                
+        out_decoder= []
+        for index, layer in enumerate(self.up_blocks):
+            if len(out_decoder) == 0:
+                out_decoder.append(layer(feature))
+            else:
+                if len(out_encoder) - index - 1 >= 0:
+                    input_feature = torch.cat((out_encoder[len(out_encoder) - index-1], out_decoder[-1]), axis=1)
+                else:
+                    input_feature = out_decoder[-1]
+                out_decoder.append(layer(input_feature))       
+        return out_decoder[-1]
+    
+class VAE(nn.Module):
+    def __init__(self, encoder_params, decoder_params=None):
+        super().__init__()
+        
+        down_blocks = []
+        for kernel in encoder_params:
+            if kernel[0] == 'same':
+                down_blocks.append(SameBlock2d(*kernel[1:]))  
+            else:  
+                down_blocks.append(DownBlock2d(*kernel[1:]))
+        self.down_blocks = nn.ModuleList(down_blocks)
+        
+        if decoder_params is not None:
+            up_blocks = []
+            for kernel in decoder_params:
+                if kernel[0] == 'same':
+                    up_blocks.append(SameBlock2d(*kernel[1:]))  
+                else:  
+                    up_blocks.append(UpBlock2d(*kernel[1:]))
+            self.up_blocks = nn.ModuleList(up_blocks)
+                    
+    def forward(self, x):
+        out_encoder = []
+        for layer in self.down_blocks:
+            if len(out_encoder) == 0:
+                out_encoder.append(layer(x))
+            else:
+                out_encoder.append(layer(out_encoder[-1]))
+        
+        if self.up_blocks is not None:
+            out_decoder= []
+            for layer in self.up_blocks:
+                if len(out_decoder) == 0:
+                    out_decoder.append(layer(out_encoder[-1]))
+                else:
+                    out_decoder.append(layer(out_decoder[-1]))       
+            return out_decoder[-1]
+        else:
+            return out_encoder[-1]
+        
+    def extract_feature(self, x=None):
+        out_encoder = []
+        for layer in self.down_blocks:
+            if len(out_encoder) == 0:
+                out_encoder.append(layer(x))
+            else:
+                out_encoder.append(layer(out_encoder[-1]))
+        return out_encoder[-1]
+    
+    def decoder(self, feature=None):                
+        out_decoder= []
+        for layer in self.up_blocks:
+            if len(out_decoder) == 0:
+                out_decoder.append(layer(feature))
+            else:
+                out_decoder.append(layer(out_decoder[-1]))    
+        return out_decoder[-1]
