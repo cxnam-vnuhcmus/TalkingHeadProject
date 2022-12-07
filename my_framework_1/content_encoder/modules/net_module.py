@@ -9,7 +9,7 @@ from .stylegan2_module import Generator
 from .adain_module import adaptive_instance_normalization as adain
 import torch.nn as nn
 import math
-
+import sys
 
 # Misc
 img2mse = lambda x, y : torch.mean((x - y) ** 2)
@@ -879,11 +879,11 @@ class UpBlock2d(nn.Module):
     Upsampling block for use in decoder.
     """
 
-    def __init__(self, in_features, out_features, kernel_size=3, padding=1, groups=1):
+    def __init__(self, in_features, out_features, kernel_size=3, padding=1, stride=1):
         super(UpBlock2d, self).__init__()
 
         self.conv = nn.Conv2d(in_channels=in_features, out_channels=out_features, kernel_size=kernel_size,
-                              padding=padding, groups=groups)
+                              padding=padding, stride=stride)
         self.norm = BatchNorm2d(out_features, affine=True)
 
     def forward(self, x):
@@ -899,10 +899,10 @@ class DownBlock2d(nn.Module):
     Downsampling block for use in encoder.
     """
 
-    def __init__(self, in_features, out_features, kernel_size=3, padding=1, groups=1):
+    def __init__(self, in_features, out_features, kernel_size=3, padding=1, stride=1):
         super(DownBlock2d, self).__init__()
         self.conv = nn.Conv2d(in_channels=in_features, out_channels=out_features, kernel_size=kernel_size,
-                              padding=padding, groups=groups)
+                              padding=padding, stride=stride)
         self.norm = BatchNorm2d(out_features, affine=True)
         self.pool = nn.AvgPool2d(kernel_size=(2, 2))
 
@@ -919,10 +919,10 @@ class SameBlock2d(nn.Module):
     Simple block, preserve spatial resolution.
     """
 
-    def __init__(self, in_features, out_features, groups=1, kernel_size=3, padding=1):
+    def __init__(self, in_features, out_features, kernel_size=3, padding=1, stride=1):
         super(SameBlock2d, self).__init__()
         self.conv = nn.Conv2d(in_channels=in_features, out_channels=out_features,
-                              kernel_size=kernel_size, padding=padding, groups=groups)
+                              kernel_size=kernel_size, padding=padding, stride=stride)
         self.norm = BatchNorm2d(out_features, affine=True)
 
     def forward(self, x):
@@ -2240,3 +2240,68 @@ class AG_net(nn.Module):
             deco_out.append(self.decon(fc_feature))
         deco_out = torch.stack(deco_out,dim=1)
         return deco_out
+
+class Encoder(nn.Module):
+    """
+    Hourglass Encoder
+    """
+
+    def __init__(self, block_expansion, in_features, num_blocks=3, max_features=256):
+        super(Encoder, self).__init__()
+
+        down_blocks = []
+        for i in range(num_blocks):
+            down_blocks.append(DownBlock2d(in_features if i == 0 else min(max_features, block_expansion * (2 ** i)),
+                                           min(max_features, block_expansion * (2 ** (i + 1))),
+                                           kernel_size=3, padding=1))
+        self.down_blocks = nn.ModuleList(down_blocks)
+
+    def forward(self, x):
+        outs = [x]
+        for down_block in self.down_blocks:
+            outs.append(down_block(outs[-1]))
+        return outs
+    
+class UNet(nn.Module):
+    def __init__(self, encoder_params, decoder_params=None):
+        super().__init__()
+        
+        down_blocks = []
+        for kernel in encoder_params:
+            if kernel[0] == 'same':
+                down_blocks.append(SameBlock2d(*kernel[1:]))  
+            else:  
+                down_blocks.append(DownBlock2d(*kernel[1:]))
+        self.down_blocks = nn.ModuleList(down_blocks)
+        
+        if decoder_params is not None:
+            up_blocks = []
+            for kernel in decoder_params:
+                if kernel[0] == 'same':
+                    up_blocks.append(SameBlock2d(*kernel[1:]))  
+                else:  
+                    up_blocks.append(UpBlock2d(*kernel[1:]))
+            self.up_blocks = nn.ModuleList(up_blocks)
+                    
+    def forward(self, x):
+        out_encoder = []
+        for layer in self.down_blocks:
+            if len(out_encoder) == 0:
+                out_encoder.append(layer(x))
+            else:
+                out_encoder.append(layer(out_encoder[-1]))
+        
+        if self.up_blocks is not None:
+            out_decoder= []
+            for index, layer in enumerate(self.up_blocks):
+                if len(out_decoder) == 0:
+                    out_decoder.append(layer(out_encoder[-1]))
+                else:
+                    if len(out_encoder) - index - 1 >= 0:
+                        input_feature = torch.cat((out_encoder[len(out_encoder) - index-1], out_decoder[-1]), axis=1)
+                    else:
+                        input_feature = out_decoder[-1]
+                    out_decoder.append(layer(input_feature))       
+            return out_decoder[-1]
+        else:
+            return out_encoder[-1]

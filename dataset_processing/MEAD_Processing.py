@@ -23,7 +23,7 @@ import python_speech_features
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--person", type=str, default='M003')
+parser.add_argument("--person", type=str, default='M030')
 parser.add_argument("--extract_audio", type=bool, default=False)
 parser.add_argument("--extract_images", type=bool, default=False)
 parser.add_argument("--extract_mfcc13", type=bool, default=True)
