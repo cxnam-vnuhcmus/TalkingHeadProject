@@ -126,11 +126,11 @@ data:
     num_workers: 4
     input_types:
         - images:
-            ext: png
+            ext: jpg
             num_channels: 3
             normalize: True
         - seg_maps:
-            ext: png
+            ext: jpg
             num_channels: 1
             is_mask: True
             normalize: False
@@ -147,21 +147,21 @@ data:
 
     train:        
         roots:
-            - datasets/cityscapes/lmdb/train
-        batch_size: 2
+            - datasets/train
+        batch_size: 1
         initial_sequence_length: 4
         max_sequence_length: 16        
         augmentations:
             resize_smallest_side: 512
             random_scale_limit: 0.2
             horizontal_flip: True
-            random_crop_h_w: 512, 1024
+            random_crop_h_w: 512, 512
     val:        
         roots:
-            - datasets/cityscapes/lmdb/val
+            - datasets/test
         batch_size: 1        
         augmentations:            
-            resize_h_w: 512, 1024
+            resize_h_w: 512, 512
             horizontal_flip: False
 
 # Inference options.
@@ -174,12 +174,12 @@ test_data:
     paired: True    
     input_types:
         - seg_maps:
-            ext: png
+            ext: jpg
             num_channels: 1
             is_mask: True
             normalize: False
         - images:
-            ext: png
+            ext: jpg
             num_channels: 3
             normalize: True
 
@@ -199,5 +199,5 @@ test_data:
             - projects/vid2vid/test_data/cityscapes
         batch_size: 1        
         augmentations:            
-            resize_h_w: 512, 1024
+            resize_h_w: 512, 512
             horizontal_flip: False

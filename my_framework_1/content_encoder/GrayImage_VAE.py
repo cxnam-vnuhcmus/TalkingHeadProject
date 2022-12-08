@@ -13,13 +13,11 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--train_dataset_path', type=str, default='data/train_MEAD.json')
 parser.add_argument('--val_dataset_path', type=str, default='data/val_MEAD.json')
 
-parser.add_argument('--batch_size', type=int, default=10)
+parser.add_argument('--batch_size', type=int, default=5)
 parser.add_argument('--learning_rate', type=float, default=1.0e-4)
-parser.add_argument('--n_epoches', type=int, default=100)
+parser.add_argument('--n_epoches', type=int, default=20)
 
-parser.add_argument('--save_best_model_path', type=str, default='result_GIVAE/best_model.pt')
-parser.add_argument('--save_last_model_path', type=str, default='result_GIVAE/last_model.pt')
-parser.add_argument('--save_plot_path', type=str, default='result_GIVAE')
+parser.add_argument('--save_path', type=str, default='result_GIVAE_512_2_2')
 parser.add_argument('--use_pretrain', type=bool, default=False)
 args = parser.parse_args()
 
@@ -54,8 +52,10 @@ class GrayImage_VAE(VAE):
             ('down', 512, 512), #(8,8,512)
             ('down', 512, 512), #(4,4,512)
             ('down', 512, 512), #(2,2,512)
+            # ('down', 512, 512), #(1,1,512)
         ]
         decoder_params = [
+            # ('up', 512, 512),   #(2,2,512)
             ('up', 512, 512),   #(4,4,512)
             ('up', 512, 512),   #(8,8,512)
             ('up', 512, 512),   #(16,16,512)
@@ -91,8 +91,8 @@ class GrayImage_VAE(VAE):
         return parameters 
         
     def train_all(self):
-        # if torch.cuda.is_available():
-        #     self.cuda()
+        if torch.cuda.is_available():
+            self.cuda()
         #Load pretrain
         current_epoch = 0
         if args.use_pretrain == True:
@@ -116,21 +116,21 @@ class GrayImage_VAE(VAE):
             #Save best model
             if best_running_loss == -1 or val_running_loss < best_running_loss:
                 print(f"\nSave the best model (epoch: {epoch})\n")
-                save_model(self, epoch, self.optimizer, args.save_best_model_path)
+                save_model(self, epoch, self.optimizer, f'{args.save_path}/best_model.pt')
                 best_running_loss = val_running_loss
         #Save last model
         print(f"\nSave the last model (epoch: {epoch})\n")
-        save_model(self, epoch, self.optimizer, args.save_last_model_path)
+        save_model(self, epoch, self.optimizer, f'{args.save_path}/last_model.pt')
 
         #Save plot
-        save_plots([], [], train_loss, val_loss, args.save_plot_path)
+        save_plots([], [], train_loss, val_loss, args.save_path)
         
     def train_epoch(self, epoch):
         self.train()
         running_loss = 0
         for step, x in enumerate(self.train_dataloader):            
-            # if torch.cuda.is_available():
-            #     x = x.cuda()
+            if torch.cuda.is_available():
+                x = x.cuda()
             x = x.reshape(-1,x.shape[2],x.shape[3])
             x = x.unsqueeze(1)
             pred = self(x)
@@ -151,8 +151,8 @@ class GrayImage_VAE(VAE):
         running_loss = 0
         with torch.no_grad():
             for step, x in enumerate(self.val_dataloader):
-                # if torch.cuda.is_available():
-                #     x = x.cuda()
+                if torch.cuda.is_available():
+                    x = x.cuda()
                 x = x.reshape(-1,x.shape[2],x.shape[3])
                 x = x.unsqueeze(1)
                 pred = self(x)
@@ -167,42 +167,46 @@ class GrayImage_VAE(VAE):
     
     def inference(self):
         #Load pretrain
-        load_model(self, self.optimizer, save_file=args.save_best_model_path)
+        load_model(self, self.optimizer, save_file=f'{args.save_path}/best_model.pt')
         with torch.no_grad():
             rand_index = random.choice(range(len(self.val_dataloader)))
             x = self.val_dataset[rand_index]
             x = x.unsqueeze(0)
             if torch.cuda.is_available():
-                x.cuda()
+                x = x.cuda()
             pred = self(x)            
             loss = self.criterion(pred, x)      
             print(f'Loss: {loss}')
             import imageio
+            pred = pred[0,0]
             result_img = torch.zeros(pred.shape[0], pred.shape[0]*2)
-            result_img[:,:pred.shape[0]] = pred[0,0]
-            result_img[:,pred.shape[0]:] = x
-            imageio.imsave('result_GIVAE/fake.jpg',result_img)
-            
+            result_img[:,:pred.shape[0]] = pred
+            result_img[:,pred.shape[0]:] = x[0]
+            imageio.imsave(f'{args.save_path}/fake.jpg',result_img)
+    
+    def load_model(self):
+        load_model(self, self.optimizer, save_file=f'{args.save_path}/best_model.pt')
+                
     def extract_feature(self, x=None):
-        #Load pretrain
-        load_model(self, self.optimizer, save_file=args.save_best_model_path)
         with torch.no_grad():
+            path = ''
             if x is None:
                 rand_index = random.choice(range(len(self.val_dataloader)))
                 x = self.val_dataset[rand_index]
+                path = self.val_dataset.get_item_path(rand_index)
             x = x.unsqueeze(0)
-            print(x.shape)
-            path = self.val_dataset.get_item_path(rand_index)
         feature = super().extract_feature(x)
-        feature = feature.tolist()
-        with open('result_GIVAE/feature.json','wt') as f:
-            json.dump({'path': path, 'feature': feature}, f)
+        print(f'feature shape: {feature.shape}')
+        feature_list = feature.tolist()
+        with open(f'{args.save_path}/feature.json','wt') as f:
+            json.dump({'path': path, 'feature': feature_list}, f)
+        return feature
             
     def decoder(self):
         with torch.no_grad():
             #Load pretrain
-            load_model(self, self.optimizer, save_file=args.save_best_model_path) + 1
-            with open('result_GIVAE/feature.json','rt') as f:
+            load_model(self, self.optimizer, save_file=f'{args.save_path}/best_model.pt')
+            with open(f'{args.save_path}/feature.json','rt') as f:
                 data = json.load(f)
                 feature = data['feature']
                 img_path = os.path.join(data['path'],'00001.jpg')
@@ -218,12 +222,14 @@ class GrayImage_VAE(VAE):
             result_img = torch.zeros(raw_image.shape[0], raw_image.shape[0]*2)
             result_img[:,:raw_image.shape[0]] = image_result[0,0]
             result_img[:,raw_image.shape[0]:] = raw_image
-            imageio.imsave('result_GIVAE/fake1.jpg',result_img)     
+            result_img = result_img.cpu().detach().numpy()
+            result_img = (result_img * 255).astype(np.uint8)
+            imageio.imsave(f'{args.save_path}/fake.jpg',result_img)     
         return image_result
             
 if __name__ == '__main__': 
     net = GrayImage_VAE()
-    net.train_all()
+    # net.train_all()
     # net.inference()
-    # net.extract_feature()
-    # net.decoder()
+    net.extract_feature()
+    net.decoder()

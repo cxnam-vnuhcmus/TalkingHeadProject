@@ -601,7 +601,7 @@ def read_data_from_path(mfcc_path=None, lm_path=None, face_path=None, start=None
         mfcc_list = sorted(glob(join(mfcc_path, '*.npy')))
         if start is None and end is None:
             start = 0
-            end = len(mfcc_list)
+            end = 1
         else:
             start, end = int(start), int(end)
         for index in range(start,end):
@@ -617,7 +617,7 @@ def read_data_from_path(mfcc_path=None, lm_path=None, face_path=None, start=None
         lm_list = sorted(glob(join(lm_path, '*.json')))
         if start is None and end is None:
             start = 0
-            end = len(lm_list)
+            end = 1
         else:
             start, end = int(start), int(end)
         for index in range(start,end):
