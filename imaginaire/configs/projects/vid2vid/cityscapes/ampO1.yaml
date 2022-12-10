@@ -1,7 +1,7 @@
 # How often do you want to save output images during training.
 image_save_iter: 500
 # How often do you want to save trained models.
-snapshot_save_epoch: 5
+snapshot_save_iter: 2000
 # How often do you want to log the training stats.
 logging_iter: 100
 # Number of training epochs.
