@@ -196,7 +196,7 @@ test_data:
     test:
         is_lmdb: False
         roots:            
-            - projects/vid2vid/test_data/cityscapes
+            - datasets/val
         batch_size: 1        
         augmentations:            
             resize_h_w: 512, 512
