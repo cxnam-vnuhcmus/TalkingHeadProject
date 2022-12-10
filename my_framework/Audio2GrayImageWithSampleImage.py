@@ -20,6 +20,7 @@ parser.add_argument('--n_epoches', type=int, default=20)
 
 parser.add_argument('--save_path', type=str, default='result_A2GIWSI')
 parser.add_argument('--use_pretrain', type=bool, default=False)
+parser.add_argument('--train', action='store_true')
 args = parser.parse_args()
 
 class FaceDataset(Dataset):
@@ -30,9 +31,11 @@ class FaceDataset(Dataset):
                 self.data_path = json.load(f)
 
     def __getitem__(self, index):
-        parts = self.data_path[index].split('|')        
-        data = read_data_from_path(mfcc_path=parts[0], face_path = parts[2], start=parts[3], end=parts[4])
-        # data = read_data_from_path(mfcc_path=parts[0], face_path = parts[2])
+        parts = self.data_path[index].split('|') 
+        if args.train:       
+            data = read_data_from_path(mfcc_path=parts[0], face_path = parts[2], start=parts[3], end=parts[4])
+        else:
+            data = read_data_from_path(mfcc_path=parts[0], face_path = parts[2])
         return torch.from_numpy(data['mfcc_data_list']), torch.from_numpy(data['face_data_list'])
 
     def __len__(self):
@@ -229,9 +232,10 @@ class Audio2GrayImageWithSampleImage(nn.Module):
                 sys.stdout.flush()
         return running_loss / len(self.val_dataloader)
     
+    def load_model(self, filename='best_model.pt'):
+        load_model(self, self.optimizer, save_file=f'{args.save_path}/{filename}')
+        
     def inference(self):
-        #Load pretrain
-        load_model(self, self.optimizer, save_file=f'{args.save_path}/best_model.pt')
         if torch.cuda.is_available():
             self.cuda()
         with torch.no_grad():
@@ -253,7 +257,9 @@ class Audio2GrayImageWithSampleImage(nn.Module):
             
 if __name__ == '__main__': 
     net = Audio2GrayImageWithSampleImage()
-    net.train_all()
-    # net.inference()
-    # net.extract_feature()
-    # net.decoder()
+    if args.train:
+        net.train_all()
+    else:
+        net.load_model()
+        net.inference()
+        

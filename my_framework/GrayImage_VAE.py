@@ -3,6 +3,7 @@ import argparse
 import numpy as np
 import sys
 import random
+import datetime
 import torch
 from torch import nn, optim
 from torch.utils.data import Dataset, DataLoader
@@ -19,6 +20,7 @@ parser.add_argument('--n_epoches', type=int, default=20)
 
 parser.add_argument('--save_path', type=str, default='result_GIVAE_512_2_2')
 parser.add_argument('--use_pretrain', type=bool, default=False)
+parser.add_argument('--train', action='store_true')
 args = parser.parse_args()
 
 class FaceDataset(Dataset):
@@ -30,8 +32,10 @@ class FaceDataset(Dataset):
 
     def __getitem__(self, index):
         parts = self.data_path[index].split('|')        
-        # data = read_data_from_path(face_path = parts[2], start=parts[3], end=parts[4])
-        data = read_data_from_path(face_path = parts[2])
+        if args.train:
+            data = read_data_from_path(face_path = parts[2], start=parts[3], end=parts[4])
+        else:
+            data = read_data_from_path(face_path = parts[2])
         return  torch.from_numpy(data['face_data_list'])
 
     def __len__(self):
@@ -113,6 +117,9 @@ class GrayImage_VAE(VAE):
             msg = f"\n| Epoch: {epoch}/{args.n_epoches} | Train Loss: {train_running_loss:#.4} | Val Loss: {val_running_loss:#.4} |"
             print(msg)
             
+            ct = datetime.datetime.now()
+            save_model(self, epoch, self.optimizer, f'{args.save_path}/e{epoch}-{ct}.pt')
+            
             #Save best model
             if best_running_loss == -1 or val_running_loss < best_running_loss:
                 print(f"\nSave the best model (epoch: {epoch})\n")
@@ -184,8 +191,8 @@ class GrayImage_VAE(VAE):
             result_img[:,pred.shape[0]:] = x[0]
             imageio.imsave(f'{args.save_path}/fake.jpg',result_img)
     
-    def load_model(self):
-        load_model(self, self.optimizer, save_file=f'{args.save_path}/best_model.pt')
+    def load_model(self, filename='best_model.pt'):
+        load_model(self, self.optimizer, save_file=f'{args.save_path}/{filename}')
                 
     def extract_feature(self, x=None):
         with torch.no_grad():
@@ -205,7 +212,6 @@ class GrayImage_VAE(VAE):
     def decoder(self):
         with torch.no_grad():
             #Load pretrain
-            load_model(self, self.optimizer, save_file=f'{args.save_path}/best_model.pt')
             with open(f'{args.save_path}/feature.json','rt') as f:
                 data = json.load(f)
                 feature = data['feature']
@@ -229,7 +235,9 @@ class GrayImage_VAE(VAE):
             
 if __name__ == '__main__': 
     net = GrayImage_VAE()
-    # net.train_all()
-    # net.inference()
-    net.extract_feature()
-    net.decoder()
+    if args.train:
+        net.train_all()
+    else:
+        net.load_model()
+        net.extract_feature()
+        net.decoder()
