@@ -173,8 +173,6 @@ class GrayImage_VAE(VAE):
         return running_loss / len(self.val_dataloader)
     
     def inference(self):
-        #Load pretrain
-        load_model(self, self.optimizer, save_file=f'{args.save_path}/best_model.pt')
         with torch.no_grad():
             rand_index = random.choice(range(len(self.val_dataloader)))
             x = self.val_dataset[rand_index]

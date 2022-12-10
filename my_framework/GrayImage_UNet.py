@@ -3,6 +3,7 @@ import argparse
 import numpy as np
 import sys
 import random
+import datetime
 import torch
 from torch import nn, optim
 from torch.utils.data import Dataset, DataLoader
@@ -17,10 +18,9 @@ parser.add_argument('--batch_size', type=int, default=10)
 parser.add_argument('--learning_rate', type=float, default=1.0e-4)
 parser.add_argument('--n_epoches', type=int, default=100)
 
-parser.add_argument('--save_best_model_path', type=str, default='result/best_model.pt')
-parser.add_argument('--save_last_model_path', type=str, default='result/last_model.pt')
-parser.add_argument('--save_plot_path', type=str, default='result')
+parser.add_argument('--save_path', type=str, default='result_UNet')
 parser.add_argument('--use_pretrain', type=bool, default=False)
+parser.add_argument('--train', action='store_true')
 args = parser.parse_args()
 
 class FaceDataset(Dataset):
@@ -90,8 +90,8 @@ class GrayImage_UNet(UNet):
         return parameters 
         
     def train_all(self):
-        # if torch.cuda.is_available():
-        #     self.cuda()
+        if torch.cuda.is_available():
+            self.cuda()
         #Load pretrain
         current_epoch = 0
         if args.use_pretrain == True:
@@ -112,24 +112,27 @@ class GrayImage_UNet(UNet):
             msg = f"\n| Epoch: {epoch}/{args.n_epoches} | Train Loss: {train_running_loss:#.4} | Val Loss: {val_running_loss:#.4} |"
             print(msg)
             
+            ct = datetime.datetime.now()
+            save_model(self, epoch, self.optimizer, f'{args.save_path}/e{epoch}-{ct}.pt')
+            
             #Save best model
             if best_running_loss == -1 or val_running_loss < best_running_loss:
                 print(f"\nSave the best model (epoch: {epoch})\n")
-                save_model(self, epoch, self.optimizer, args.save_best_model_path)
+                save_model(self, epoch, self.optimizer, f'{args.save_path}/best_model.pt')
                 best_running_loss = val_running_loss
         #Save last model
         print(f"\nSave the last model (epoch: {epoch})\n")
-        save_model(self, epoch, self.optimizer, args.save_last_model_path)
+        save_model(self, epoch, self.optimizer, f'{args.save_path}/last_model.pt')
 
         #Save plot
-        save_plots([], [], train_loss, val_loss, args.save_plot_path)
+        save_plots([], [], train_loss, val_loss, args.save_path)
         
     def train_epoch(self, epoch):
         self.train()
         running_loss = 0
         for step, x in enumerate(self.train_dataloader):
-            # if torch.cuda.is_available():
-            #     x = x.cuda()
+            if torch.cuda.is_available():
+                x = x.cuda()
             x = x.reshape(-1,x.shape[2],x.shape[3])
             x = x.unsqueeze(1)
             pred = self(x)
@@ -150,8 +153,8 @@ class GrayImage_UNet(UNet):
         running_loss = 0
         with torch.no_grad():
             for step, x in enumerate(self.val_dataloader):
-                # if torch.cuda.is_available():
-                #     x = x.cuda()
+                if torch.cuda.is_available():
+                    x = x.cuda()
                 x = x.reshape(-1,x.shape[2],x.shape[3])
                 x = x.unsqueeze(1)
                 pred = self(x)
@@ -164,9 +167,10 @@ class GrayImage_UNet(UNet):
                 sys.stdout.flush()
         return running_loss / len(self.val_dataloader)
     
+    def load_model(self, filename='best_model.pt'):
+        load_model(self, self.optimizer, save_file=f'{args.save_path}/{filename}')
+        
     def inference(self):
-        #Load pretrain
-        load_model(self, self.optimizer, save_file=args.save_best_model_path) + 1
         with torch.no_grad():
             rand_index = random.choice(range(len(self.val_dataloader)))
             x = self.val_dataset[rand_index]
@@ -183,8 +187,6 @@ class GrayImage_UNet(UNet):
             imageio.imsave('result/fake.jpg',result_img)
             
     def extract_feature(self, x=None):
-        #Load pretrain
-        load_model(self, self.optimizer, save_file=args.save_best_model_path) + 1
         with torch.no_grad():
             if x is None:
                 rand_index = random.choice(range(len(self.val_dataloader)))
@@ -221,7 +223,9 @@ class GrayImage_UNet(UNet):
             
 if __name__ == '__main__': 
     net = GrayImage_UNet()
-    # net.train_all()
-    # net.inference()
-    # net.extract_feature()
-    net.decoder()
+    if args.train:
+        net.train_all()
+    else:
+        net.load_model()
+        net.extract_feature()
+        net.decoder()
