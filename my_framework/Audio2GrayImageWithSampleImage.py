@@ -3,6 +3,7 @@ import argparse
 import numpy as np
 import sys
 import random
+import datetime
 import torch
 from torch import nn, optim
 from torch.utils.data import Dataset, DataLoader
@@ -16,7 +17,7 @@ parser.add_argument('--val_dataset_path', type=str, default='data/val_MEAD.json'
 
 parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--learning_rate', type=float, default=1.0e-4)
-parser.add_argument('--n_epoches', type=int, default=20)
+parser.add_argument('--n_epoches', type=int, default=50)
 
 parser.add_argument('--save_path', type=str, default='result_A2GIWSI')
 parser.add_argument('--use_pretrain', type=bool, default=False)
@@ -32,10 +33,10 @@ class FaceDataset(Dataset):
 
     def __getitem__(self, index):
         parts = self.data_path[index].split('|') 
-        if args.train:       
-            data = read_data_from_path(mfcc_path=parts[0], face_path = parts[2], start=parts[3], end=parts[4])
-        else:
-            data = read_data_from_path(mfcc_path=parts[0], face_path = parts[2])
+        # if args.train:       
+        data = read_data_from_path(mfcc_path=parts[0], face_path = parts[2], start=parts[3], end=parts[4])
+        # else:
+        #     data = read_data_from_path(mfcc_path=parts[0], face_path = parts[2])
         return torch.from_numpy(data['mfcc_data_list']), torch.from_numpy(data['face_data_list'])
 
     def __len__(self):
@@ -48,27 +49,17 @@ class FaceDataset(Dataset):
 class Audio2GrayImageWithSampleImage(nn.Module):
     def __init__(self):
         super().__init__()
-        self.down = DownBlock2d(512,512)
+        self.down = DownBlock2d(512,256)
         
         with torch.no_grad():
-            first_image = read_data_from_path(face_path='/root/Datasets/Features/M003/faces/neutral/level_1/00001')
-            first_image = torch.from_numpy(first_image['face_data_list'])
+            self.first_image = read_data_from_path(face_path='/root/Datasets/Features/M003/faces/neutral/level_1/00001')
+            self.first_image = torch.from_numpy(self.first_image['face_data_list'])
             self.grayimage_model = GrayImage_VAE()
             self.grayimage_model.load_model()
-            # if torch.cuda.is_available():
-            #     first_image = first_image.cuda()
-            #     self.grayimage_model.cuda()
-                
-            for param in self.grayimage_model.parameters():
-                param.requires_grad = False
-                
-            self.image_feature = self.grayimage_model.extract_feature(first_image)        
-            self.image_feature = self.down(self.image_feature)
-            self.image_feature = self.image_feature.view(self.image_feature.shape[0], -1)
-            
             if torch.cuda.is_available():
-                self.image_feature = self.image_feature.cuda()
-                
+                self.first_image = self.first_image.cuda()
+                self.grayimage_model.cuda()
+                                
         self.audio_eocder = nn.Sequential(
             conv2d(1,64,3,1,1),
             conv2d(64,128,3,1,1),
@@ -85,7 +76,7 @@ class Audio2GrayImageWithSampleImage(nn.Module):
             nn.ReLU(True),
 
             )
-        self.lstm = nn.LSTM(256+512,256,3,batch_first = True)
+        self.lstm = nn.LSTM(256+256,256,3,batch_first = True)
     
         self.decon = nn.Sequential(
                 nn.ConvTranspose2d(256, 256, kernel_size=6, stride=2, padding=1, bias=True),#4,4
@@ -126,22 +117,32 @@ class Audio2GrayImageWithSampleImage(nn.Module):
                       torch.autograd.Variable(torch.zeros(3, audio.size(0), 256).cuda()))
         
         lstm_input = []
-        for step_t in range(audio.size(1)):
-            current_audio = audio[ : ,step_t , :, :].unsqueeze(1)
-            current_feature = self.audio_eocder(current_audio)
-            current_feature = current_feature.view(current_feature.size(0), -1)
-            current_feature = self.audio_eocder_fc(current_feature)
-            features = torch.cat([self.image_feature, current_feature], 1)
-            lstm_input.append(features)
-            
-        lstm_input = torch.stack(lstm_input, dim = 1)
-        lstm_out, _ = self.lstm(lstm_input, hidden)            
         deco_out = []
         for step_t in range(audio.size(1)):
-            fc_in = lstm_out[:,step_t,:]
+            current_audio = audio[ : ,step_t , :, :].unsqueeze(1)   #1,1,28,12
+            current_feature = self.audio_eocder(current_audio)      #1,512,12,2
+            current_feature = current_feature.view(current_feature.size(0), -1) #1,512*12*2
+            current_feature = self.audio_eocder_fc(current_feature) #1,256
+            
+            with torch.no_grad():
+                if step_t == 0:
+                    next_frame = self.first_image   #1,256,256
+                else:
+                    next_frame = deco_out[-1].squeeze(1) #1,256,256
+                    
+                image_feature = self.grayimage_model.extract_feature(next_frame)      #1,512,2,2  
+            image_feature = self.down(image_feature)                         #1,256,1,1  
+            image_feature = image_feature.view(image_feature.shape[0], -1) #1,256
+                        
+            features = torch.cat([image_feature, current_feature], 1)      #1,512
+            lstm_input.append(features)
+            lstm_input_torch = torch.stack(lstm_input, dim = 1)
+            lstm_out, _ = self.lstm(lstm_input_torch, hidden)                    #1,Step,256
+
+            fc_in = lstm_out[:,step_t,:]                                    #1,256
             fc_feature = torch.unsqueeze(fc_in,2)
-            fc_feature = torch.unsqueeze(fc_feature,3)
-            decon_feature = self.decon(fc_feature)
+            fc_feature = torch.unsqueeze(fc_feature,3)                      #1,256,1,1
+            decon_feature = self.decon(fc_feature)                          #1,1,256,256
             deco_out.append(decon_feature)
 
         deco_out = torch.stack(deco_out,dim=1)
@@ -181,6 +182,9 @@ class Audio2GrayImageWithSampleImage(nn.Module):
             msg = f"\n| Epoch: {epoch}/{args.n_epoches} | Train Loss: {train_running_loss:#.4} | Val Loss: {val_running_loss:#.4} |"
             print(msg)
             
+            ct = datetime.datetime.now()
+            save_model(self, epoch, self.optimizer, f'{args.save_path}/e{epoch}-{ct}.pt')
+            
             #Save best model
             if best_running_loss == -1 or val_running_loss < best_running_loss:
                 print(f"\nSave the best model (epoch: {epoch})\n")
@@ -194,14 +198,14 @@ class Audio2GrayImageWithSampleImage(nn.Module):
         save_plots([], [], train_loss, val_loss, args.save_path)
         
     def train_epoch(self, epoch):
-        self.train()
+        self.train()        
         running_loss = 0
         for step, (x,y) in enumerate(self.train_dataloader):            
             if torch.cuda.is_available():
-                x,y = x.cuda(), y.cuda()
+                x,y = x.cuda(), y.cuda()    #x = 1,25,28,12; y = 1,25,256,256
             
-            pred = self(x)
-            pred = pred.squeeze(2)
+            pred = self(x)                  #pred: 1,25,1,256,256
+            pred = pred.squeeze(2)          #1,25,256,256
             
             self.optimizer.zero_grad()
             loss = self.criterion(pred, y)
@@ -220,9 +224,9 @@ class Audio2GrayImageWithSampleImage(nn.Module):
         with torch.no_grad():
             for step, (x,y) in enumerate(self.val_dataloader):
                 if torch.cuda.is_available():
-                    x,y = x.cuda(), y.cuda()
-                pred = self(x)
+                    x,y = x.cuda(), y.cuda()    #y = 1,1,256,256
                 
+                pred = self(x)
                 pred = pred.squeeze(2)
                 loss = self.criterion(pred, y)      
                 
@@ -240,11 +244,11 @@ class Audio2GrayImageWithSampleImage(nn.Module):
             self.cuda()
         with torch.no_grad():
             rand_index = random.choice(range(len(self.val_dataloader)))
-            x,y = self.val_dataset[rand_index]
+            x,y = self.val_dataset[rand_index]      #x = 25,28,12; y = 25,256,256
             x = x.unsqueeze(0)
             if torch.cuda.is_available():
-                x,y = x.cuda(), y.cuda()
-            pred = self(x)    
+                x,y = x.cuda(), y.cuda()    
+            pred = self(x)          #pred: 1,25,1,256,256
             pred = pred.squeeze(2)
             y = y.unsqueeze(0)        
             loss = self.criterion(pred, y)      

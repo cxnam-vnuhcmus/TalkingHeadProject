@@ -201,7 +201,6 @@ class GrayImage_VAE(VAE):
                 path = self.val_dataset.get_item_path(rand_index)
             x = x.unsqueeze(0)
         feature = super().extract_feature(x)
-        print(f'feature shape: {feature.shape}')
         feature_list = feature.tolist()
         with open(f'{args.save_path}/feature.json','wt') as f:
             json.dump({'path': path, 'feature': feature_list}, f)
