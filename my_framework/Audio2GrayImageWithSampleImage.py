@@ -32,7 +32,8 @@ class FaceDataset(Dataset):
                 self.data_path = json.load(f)
 
     def __getitem__(self, index):
-        parts = self.data_path[index].split('|') 
+        rand_index = random.choice(range(len(self.data_path)))
+        parts = self.data_path[rand_index].split('|') 
         # if args.train:       
         data = read_data_from_path(mfcc_path=parts[0], face_path = parts[2], start=parts[3], end=parts[4])
         # else:
@@ -40,7 +41,8 @@ class FaceDataset(Dataset):
         return torch.from_numpy(data['mfcc_data_list']), torch.from_numpy(data['face_data_list'])
 
     def __len__(self):
-        return len(self.data_path)
+        # return len(self.data_path)
+        return 1000
     
     def get_item_path(self, index):
         parts = self.data_path[index].split('|')
@@ -126,9 +128,9 @@ class Audio2GrayImageWithSampleImage(nn.Module):
             
             with torch.no_grad():
                 if step_t == 0:
-                    next_frame = self.first_image   #1,256,256
+                    next_frame = self.first_image.unsqueeze(1)   #1,1,256,256
                 else:
-                    next_frame = deco_out[-1].squeeze(1) #1,256,256
+                    next_frame = deco_out[-1]                   #1,1,256,256
                     
                 image_feature = self.grayimage_model.extract_feature(next_frame)      #1,512,2,2  
             image_feature = self.down(image_feature)                         #1,256,1,1  
@@ -208,7 +210,13 @@ class Audio2GrayImageWithSampleImage(nn.Module):
             pred = pred.squeeze(2)          #1,25,256,256
             
             self.optimizer.zero_grad()
-            loss = self.criterion(pred, y)
+
+            pred = pred.view(-1,1,pred.shape[2], pred.shape[3]) * 255
+            y = y.view(-1,1,y.shape[2], y.shape[3]) * 255
+            pred_feature = self.grayimage_model.extract_feature(pred).view(-1)      #1,512,2,2  
+            y_feature = self.grayimage_model.extract_feature(y).view(-1)       #1,512,2,2  
+            
+            loss = self.criterion(pred_feature, y_feature)
             loss.backward()
             self.optimizer.step()
         
@@ -228,7 +236,12 @@ class Audio2GrayImageWithSampleImage(nn.Module):
                 
                 pred = self(x)
                 pred = pred.squeeze(2)
-                loss = self.criterion(pred, y)      
+                
+                pred = pred.view(-1,1,pred.shape[2], pred.shape[3]) * 255
+                y = y.view(-1,1,y.shape[2], y.shape[3]) * 255
+                pred_feature = self.grayimage_model.extract_feature(pred).view(-1)      #1,512,2,2  
+                y_feature = self.grayimage_model.extract_feature(y).view(-1)       #1,512,2,2
+                loss = self.criterion(pred_feature, y_feature)      
                 
                 running_loss += loss.item()
                 msg = f"\r| Step: {step}/{len(self.val_dataloader)} of epoch {epoch} | Val Loss: {loss:#.4} |"
@@ -244,16 +257,18 @@ class Audio2GrayImageWithSampleImage(nn.Module):
             self.cuda()
         with torch.no_grad():
             rand_index = random.choice(range(len(self.val_dataloader)))
-            x,y = self.val_dataset[rand_index]      #x = 25,28,12; y = 25,256,256
-            x = x.unsqueeze(0)
+            x,y = self.val_dataset[rand_index]      
+            x,y = x.unsqueeze(0), y.unsqueeze(0)    #x = 1,25,28,12; y = 1,25,256,256
             if torch.cuda.is_available():
                 x,y = x.cuda(), y.cuda()    
+
             pred = self(x)          #pred: 1,25,1,256,256
             pred = pred.squeeze(2)
-            y = y.unsqueeze(0)        
+
             loss = self.criterion(pred, y)      
             print(f'Loss: {loss}')
             print(pred.shape)
+            
             videoframes = pred[0].cpu().detach().numpy()
             videoframes =(videoframes * 255).astype(np.uint8)
             create_video(videoframes,f'{args.save_path}/prediction.mp4')

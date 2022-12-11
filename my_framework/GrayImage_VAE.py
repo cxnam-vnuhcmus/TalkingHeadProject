@@ -14,7 +14,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--train_dataset_path', type=str, default='data/train_MEAD.json')
 parser.add_argument('--val_dataset_path', type=str, default='data/val_MEAD.json')
 
-parser.add_argument('--batch_size', type=int, default=5)
+parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--learning_rate', type=float, default=1.0e-4)
 parser.add_argument('--n_epoches', type=int, default=20)
 
@@ -140,6 +140,7 @@ class GrayImage_VAE(VAE):
                 x = x.cuda()
             x = x.reshape(-1,x.shape[2],x.shape[3])
             x = x.unsqueeze(1)
+            print(x.shape)
             pred = self(x)
             
             self.optimizer.zero_grad()
@@ -199,7 +200,7 @@ class GrayImage_VAE(VAE):
                 rand_index = random.choice(range(len(self.val_dataloader)))
                 x = self.val_dataset[rand_index]
                 path = self.val_dataset.get_item_path(rand_index)
-            x = x.unsqueeze(0)
+                x = x.unsqueeze(0)
         feature = super().extract_feature(x)
         feature_list = feature.tolist()
         with open(f'{args.save_path}/feature.json','wt') as f:
