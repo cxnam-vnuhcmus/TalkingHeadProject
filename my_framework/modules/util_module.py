@@ -622,7 +622,7 @@ def read_data_from_path(mfcc_path=None, lm_path=None, face_path=None, start=None
             start, end = int(start), int(end)
         for index in range(start,end):
             try:
-                lm_file = os.path.join(lm_path, f'{index:05d}.json')
+                lm_file = os.path.join(lm_path, f'{index+1:05d}.json')
             except Exception as e:
                 print(f'{lm_path} | {index}')
             with open(lm_file, 'r') as f:
