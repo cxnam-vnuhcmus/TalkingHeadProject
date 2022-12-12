@@ -225,7 +225,7 @@ class A2LM_LSTM(nn.Module):
                 result_img[:,256:,:] = outputs_pred[i] * 255
                 outputs.append(result_img)
             
-            create_video(outputs,f'{args.save_path}/prediction.mp4')
+            create_video(outputs,f'{args.save_path}/prediction.mp4', fps=10)
     
     def load_model(self, filename='best_model.pt'):
         return load_model(self, self.optimizer, save_file=f'{args.save_path}/{filename}')
