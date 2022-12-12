@@ -1,6 +1,7 @@
 from tqdm import tqdm
 from scipy.spatial import ConvexHull
 import torch
+from torch import nn
 import numpy as np
 import imageio
 import os
@@ -718,3 +719,87 @@ def save_plots(train_acc, val_acc, train_loss, val_loss, save_path='.'):
     plt.ylabel('Loss')
     plt.legend()
     plt.savefig(os.path.join(save_path,'loss.png'))
+    
+def compute_FeatureMatching_loss(self, pred_fake, pred_real):
+    # GAN feature matching loss
+    # feature: 25, 512, 1, 1
+    loss_FM = torch.zeros(1)
+    feat_weights = 4.0 / (self.opt.n_layers_D + 1)
+    D_weights = 1.0 / self.opt.num_D
+    for i in range(min(len(pred_fake), self.opt.num_D)):
+        for j in range(len(pred_fake[i])):
+            loss_FM += D_weights * feat_weights * \
+                nn.L1Loss()(pred_fake[i][j], pred_real[i][j].detach()) * self.opt.lambda_feat
+    
+    return loss_FM
+
+from torchvision import models
+class Vgg19(nn.Module):
+    def __init__(self, requires_grad=False):
+        super(Vgg19, self).__init__()
+        vgg_pretrained_features = models.vgg19(pretrained=True).features
+        self.slice1 = torch.nn.Sequential()
+        self.slice2 = torch.nn.Sequential()
+        self.slice3 = torch.nn.Sequential()
+        self.slice4 = torch.nn.Sequential()
+        self.slice5 = torch.nn.Sequential()
+        for x in range(2):
+            self.slice1.add_module(str(x), vgg_pretrained_features[x])
+        for x in range(2, 7):
+            self.slice2.add_module(str(x), vgg_pretrained_features[x])
+        for x in range(7, 12):
+            self.slice3.add_module(str(x), vgg_pretrained_features[x])
+        for x in range(12, 21):
+            self.slice4.add_module(str(x), vgg_pretrained_features[x])
+        for x in range(21, 30):
+            self.slice5.add_module(str(x), vgg_pretrained_features[x])
+        if not requires_grad:
+            for param in self.parameters():
+                param.requires_grad = False
+
+    def forward(self, X):
+        h_relu1 = self.slice1(X)
+        h_relu2 = self.slice2(h_relu1)        
+        h_relu3 = self.slice3(h_relu2)        
+        h_relu4 = self.slice4(h_relu3)        
+        h_relu5 = self.slice5(h_relu4)                
+        out = [h_relu1, h_relu2, h_relu3, h_relu4, h_relu5]
+        return 
+    
+class VGGLoss(nn.Module):
+    def __init__(self, model=None):
+        super(VGGLoss, self).__init__()
+        if model is None:
+            self.vgg = Vgg19()
+        else:
+            self.vgg = model
+
+        self.vgg.cuda()
+        # self.vgg.eval()
+        self.criterion = nn.L1Loss()
+        # self.style_criterion = StyleLoss()
+        self.weights = [1.0, 1.0, 1.0, 1.0, 1.0]
+        # self.style_weights = [1.0, 1.0, 1.0, 1.0, 1.0]
+        # self.weights = [5.0, 1.0, 0.5, 0.4, 0.8]
+        # self.style_weights = [10e4, 1000, 50, 15, 50]
+
+    def forward(self, x, y, style=False):
+        x_vgg, y_vgg = self.vgg(x), self.vgg(y)
+        loss = 0
+        if style:
+            # return both perceptual loss and style loss.
+            style_loss = 0
+            for i in range(len(x_vgg)):
+                this_loss = (self.weights[i] *
+                             self.criterion(x_vgg[i], y_vgg[i].detach()))
+                # this_style_loss = (self.style_weights[i] *
+                #                    self.style_criterion(x_vgg[i], y_vgg[i].detach()))
+                loss += this_loss
+                # style_loss += this_style_loss
+            # return loss, style_loss
+            return loss
+
+        for i in range(len(x_vgg)):
+            this_loss = (self.weights[i] * self.criterion(x_vgg[i], y_vgg[i].detach()))
+            loss += this_loss
+        return loss
