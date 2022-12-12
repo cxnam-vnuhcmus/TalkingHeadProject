@@ -19,8 +19,8 @@ parser.add_argument('--batch_size', type=int, default=32)
 parser.add_argument('--learning_rate', type=float, default=1.0e-4)
 parser.add_argument('--n_epoches', type=int, default=500)
 
-parser.add_argument('--save_path', type=str, default='result_A2LM_LSTM')
-parser.add_argument('--use_pretrain', type=bool, default=True)
+parser.add_argument('--save_path', type=str, default='result_A2LM_LSTM0')
+parser.add_argument('--use_pretrain', type=bool, default=False)
 parser.add_argument('--train', action='store_true')
 args = parser.parse_args()
 
@@ -48,24 +48,19 @@ class FaceDataset(Dataset):
 class A2LM_LSTM(nn.Module):
     def __init__(self):
         super().__init__()
-        self.audio_eocder = nn.Sequential(
-            conv2d(1,64,3,1,1),
-            conv2d(64,128,3,1,1),
-            nn.MaxPool2d(3, stride=(1,2)),
-            conv2d(128,256,3,1,1),
-            conv2d(256,256,3,1,1),
-            conv2d(256,512,3,1,1),
-            nn.MaxPool2d(3, stride=(2,2))
-            )
-        self.audio_eocder_fc = nn.Sequential(
-            nn.Linear(1024 *12,2048),
-            nn.ReLU(True),
-            nn.Linear(2048,512),
-            nn.ReLU(True),
-            )
-        self.lstm = nn.LSTM(512,256,3,batch_first = True)
-        
-        self.fc = nn.Sequential(
+        self.fc1 = nn.Sequential(
+                nn.Linear(in_features=28*12, out_features=512),
+                nn.BatchNorm1d(512),
+                nn.LeakyReLU(0.2),
+                nn.Linear(512, 512),
+                )
+        self.LSTM = nn.LSTM(input_size=512,
+                            hidden_size=256,
+                            num_layers=3,
+                            dropout=0,
+                            bidirectional=False,
+                            batch_first=True)
+        self.fc2 = nn.Sequential(
                 nn.Linear(in_features=256, out_features=512),
                 nn.BatchNorm1d(512),
                 nn.LeakyReLU(0.2),
@@ -97,26 +92,17 @@ class A2LM_LSTM(nn.Module):
             print("Trainable Parameters: %.3fM" % parameters)
         return parameters 
     
-    def forward(self, audio):
-        hidden = ( torch.autograd.Variable(torch.zeros(3, audio.size(0), 256).cuda()),
-                      torch.autograd.Variable(torch.zeros(3, audio.size(0), 256).cuda()))
-        
-        lstm_input = []
-        for step_t in range(audio.size(1)):
-            current_audio = audio[ : ,step_t , :, :].unsqueeze(1)   #1,1,28,12
-            current_feature = self.audio_eocder(current_audio)      #1,512,12,2
-            current_feature = current_feature.view(current_feature.size(0), -1) #1,512*12*2
-            current_feature = self.audio_eocder_fc(current_feature) #1,256
-            lstm_input.append(current_feature)
-            
-        lstm_input_torch = torch.stack(lstm_input, dim = 1)         #1,F,256
-        lstm_out, _ = self.lstm(lstm_input_torch, hidden)           #1,F,256
-        
-        lstm_out = lstm_out.reshape(-1,lstm_out.shape[-1])             #1*F,256
-        lm_pred = self.fc(lstm_out)                                 #1*F,68*2
-        lm_pred = lm_pred.view(audio.shape[0], audio.shape[1],-1)   #1,F,68*2
+    def forward(self, x):
+        bs, _ , ndim = x.shape
+        x = x.view(-1, ndim)
+        x = self.fc1(x)  
+        x = x.view(bs, -1, 512)
+        output, _ = self.LSTM(x)
+        output = output.reshape(-1, 256)
+        pred = self.fc2(output)
+        pred = pred.view(bs, -1, pred.shape[1])
 
-        return lm_pred
+        return pred
         
         
     def train_all(self):
@@ -164,6 +150,7 @@ class A2LM_LSTM(nn.Module):
         for step, (audio, lm_gt) in enumerate(self.train_dataloader):            
             if torch.cuda.is_available():
                 audio, lm_gt = audio.cuda(), lm_gt.cuda()      #audio = 1,25,28,12; lm = 1,25,68*2
+                audio = audio.reshape(audio.shape[0], audio.shape[1], -1)   #1,25,28*12
                 
             lm_pred = self(audio)   #1,25,68*2
             
@@ -185,6 +172,7 @@ class A2LM_LSTM(nn.Module):
             for step, (audio, lm_gt) in enumerate(self.val_dataloader):
                 if torch.cuda.is_available():
                     audio, lm_gt = audio.cuda(), lm_gt.cuda()      #audio = 1,25,28,12; lm = 1,25,68*2
+                    audio = audio.reshape(audio.shape[0], audio.shape[1], -1)   #1,25,28*12
                     
                 lm_pred = self(audio)       #1,25,68*2
                 loss = self.criterion(lm_pred, lm_gt)      
@@ -201,7 +189,8 @@ class A2LM_LSTM(nn.Module):
         with torch.no_grad():
             rand_index = random.choice(range(len(self.val_dataloader)))
             audio,lm_gt = self.val_dataset[rand_index]      
-            audio = audio.unsqueeze(0)    #x = 1,25,28,12; y = 25,68*2
+            audio = audio.unsqueeze(0)    #x = 1,25,28,12; y = 1,25,68*2
+            audio = audio.reshape(audio.shape[0], audio.shape[1], -1)   #1,25,28*12
             if torch.cuda.is_available():
                 audio,lm_gt = audio.cuda(), lm_gt.cuda()   
             
