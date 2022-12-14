@@ -91,7 +91,7 @@ class GrayImage_VAE(VAE):
         parameters = filter(lambda p: p.requires_grad, self.parameters())
         parameters = sum([np.prod(p.size()) for p in parameters]) / 1_000_000
         if print_out:
-            print("Trainable Parameters: %.3fM" % parameters)
+            print(self.__class__.__name__ + " Parameters: %.3fM" % parameters)
         return parameters 
         
     def train_all(self):
