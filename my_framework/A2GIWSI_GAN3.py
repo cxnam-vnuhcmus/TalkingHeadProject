@@ -44,8 +44,8 @@ class FaceDataset(Dataset):
         return torch.from_numpy(data['mfcc_data_list']), torch.from_numpy(data['face_data_list'])
 
     def __len__(self):
-        return len(self.data_path)
-        # return 10
+        # return len(self.data_path)
+        return 1000
     
     def get_item_path(self, index):
         parts = self.data_path[index].split('|')
@@ -85,6 +85,7 @@ class A2GIWSI_GAN(nn.Module):
         
         self.criterion = nn.BCEWithLogitsLoss()
         self.l1_loss = nn.L1Loss()
+        self.ssiml1_loss = MS_SSIM_L1_LOSS()
         self.generator_optimizer = optim.Adam(self.parameters(), lr = args.generator_lr)
         
         self.init_model()
@@ -169,9 +170,13 @@ class A2GIWSI_GAN(nn.Module):
             with torch.no_grad():
                 real_img = real_img.view(-1, 1, real_img.shape[2], real_img.shape[3]) #25,1,256,256
                 real_feature = self.vae.extract_feature(real_img)   #1,25,512,2,2
+                fake_img = self.vae.decoder(fake_feature)
+                new_real_img = self.vae.decoder(real_feature)
             
             self.generator_optimizer.zero_grad()
-            generator_loss = self.l1_loss(fake_feature, real_feature)
+            l1_loss = self.l1_loss(fake_feature, real_feature)
+            ssim_loss = self.ssiml1_loss(fake_img, new_real_img) * 100
+            generator_loss = l1_loss + ssim_loss
             generator_loss.backward()
             self.generator_optimizer.step()
             

@@ -193,7 +193,7 @@ class GrayImage_VAE(VAE):
     def load_model(self, filename='best_model.pt'):
         load_model(self, self.optimizer, save_file=f'{args.save_path}/{filename}')
                 
-    def extract_feature(self, x=None):
+    def extract_feature(self, x=None): #25,1,256,256
         with torch.no_grad():
             path = ''
             if x is None:
@@ -201,34 +201,34 @@ class GrayImage_VAE(VAE):
                 x = self.val_dataset[rand_index]
                 path = self.val_dataset.get_item_path(rand_index)
                 x = x.unsqueeze(0)
-        feature = super().extract_feature(x)
-        feature_list = feature.tolist()
-        with open(f'{args.save_path}/feature.json','wt') as f:
-            json.dump({'path': path, 'feature': feature_list}, f)
+        feature = super().extract_feature(x)        #1,25,512,2,2
+        # feature_list = feature.tolist()
+        # with open(f'{args.save_path}/feature.json','wt') as f:
+        #     json.dump({'path': path, 'feature': feature_list}, f)
         return feature
             
-    def decoder(self):
+    def decoder(self, feature):
         with torch.no_grad():
             #Load pretrain
-            with open(f'{args.save_path}/feature.json','rt') as f:
-                data = json.load(f)
-                feature = data['feature']
-                img_path = os.path.join(data['path'],'00001.jpg')
+            # with open(f'{args.save_path}/feature.json','rt') as f:
+            #     data = json.load(f)
+            #     feature = data['feature']
+            #     img_path = os.path.join(data['path'],'00001.jpg')
             
-            feature = torch.FloatTensor(feature)            
+            # feature = torch.FloatTensor(feature)            
             image_result = super().decoder(feature)   
             
-            import imageio
-            raw_image = imageio.imread(img_path)
-            raw_image = raw_image / 255.0    
-            raw_image = torch.from_numpy(raw_image.astype(np.float32))
+            # import imageio
+            # raw_image = imageio.imread(img_path)
+            # raw_image = raw_image / 255.0    
+            # raw_image = torch.from_numpy(raw_image.astype(np.float32))
             
-            result_img = torch.zeros(raw_image.shape[0], raw_image.shape[0]*2)
-            result_img[:,:raw_image.shape[0]] = image_result[0,0]
-            result_img[:,raw_image.shape[0]:] = raw_image
-            result_img = result_img.cpu().detach().numpy()
-            result_img = (result_img * 255).astype(np.uint8)
-            imageio.imsave(f'{args.save_path}/fake.jpg',result_img)     
+            # result_img = torch.zeros(raw_image.shape[0], raw_image.shape[0]*2)
+            # result_img[:,:raw_image.shape[0]] = image_result[0,0]
+            # result_img[:,raw_image.shape[0]:] = raw_image
+            # result_img = result_img.cpu().detach().numpy()
+            # result_img = (result_img * 255).astype(np.uint8)
+            # imageio.imsave(f'{args.save_path}/fake.jpg',result_img)     
         return image_result
             
 if __name__ == '__main__': 
