@@ -174,7 +174,7 @@ class A2GIWSI_GAN(nn.Module):
                 new_real_img = self.vae.decoder(real_feature)
             
             self.generator_optimizer.zero_grad()
-            l1_loss = self.l1_loss(fake_feature, real_feature)
+            l1_loss = self.l1_loss(fake_feature, real_feature) * 10
             ssim_loss = self.ssiml1_loss(fake_img, new_real_img) * 100
             generator_loss = l1_loss + ssim_loss
             generator_loss.backward()
@@ -196,11 +196,16 @@ class A2GIWSI_GAN(nn.Module):
                 audio,real_img = audio.cuda(), real_img.cuda()    #x = 1,25,28,12; y = 1,25,256,256
                 
             fake_feature = self(audio)  #1,25,512,2,2
-            
+            fake_feature = fake_feature.reshape(-1, *fake_feature.shape[2:])
             with torch.no_grad():
+                real_img = real_img.view(-1, 1, real_img.shape[2], real_img.shape[3]) #25,1,256,256
                 real_feature = self.vae.extract_feature(real_img)   #1,25,512,2,2
+                fake_img = self.vae.decoder(fake_feature)
+                new_real_img = self.vae.decoder(real_feature)
             
-            generator_loss = self.l1_loss(fake_feature, real_feature)
+            l1_loss = self.l1_loss(fake_feature, real_feature) * 10
+            ssim_loss = self.ssiml1_loss(fake_img, new_real_img) * 100
+            generator_loss = l1_loss + ssim_loss
             
             #Summary        
             G_Loss += generator_loss.item()
