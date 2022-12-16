@@ -64,16 +64,42 @@ import cv2
 #     os.makedirs(des_img_folder, exist_ok=True)
 #     subprocess.call(f'cp -r {img_folder}/* {des_img_folder}', shell=True)
 
+# img_files = glob(os.path.join('/root/TalkingHead/imaginaire/datasets/test/images','**/*.jpg'), recursive=True)
+# for img_file in tqdm(img_files):
+#     img = cv2.imread(img_file)
+#     image_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+#     ret, thresh = cv2.threshold(image_gray, 100, 255, cv2.THRESH_BINARY)
+#     img = img[:,:,2] * thresh
+    
+#     des_img_file = img_file.replace('/images/','/seg_maps/')
+#     os.makedirs(os.path.dirname(des_img_file), exist_ok=True)
+#     cv2.imwrite(des_img_file, img)
+    
+import numpy as np
 img_files = glob(os.path.join('/root/TalkingHead/imaginaire/datasets/test/images','**/*.jpg'), recursive=True)
 for img_file in tqdm(img_files):
-    img = cv2.imread(img_file)
-    image_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    ret, thresh = cv2.threshold(image_gray, 100, 255, cv2.THRESH_BINARY)
-    img = img[:,:,2] * thresh
+    img_file_parts = img_file.split('/')
+    img_file_name = img_file_parts[-1][:-4]
+    img_file_path = img_file_parts[-2]
+    img_file_path = img_file_path.replace('M003_','')
+    img_file_path = img_file_path.replace('_','/')
+    img_file_path = img_file_path.replace('level','level_')
     
-    des_img_file = img_file.replace('/images/','/seg_maps/')
-    os.makedirs(os.path.dirname(des_img_file), exist_ok=True)
-    cv2.imwrite(des_img_file, img)
+    full_path = f'/root/Datasets/Features/M003/landmarks74/{img_file_path}/{img_file_name}.json'
+    if os.path.exists(full_path):
+        with open(full_path, 'r') as f:
+            data = json.load(f)
+            lm_data = np.asarray(data['lm68']) + (data['bb'][0],data['bb'][1])
+    
+    des_path = img_file.replace('/images/','/landmarks-dlib68/')
+    des_path = des_path.replace('.jpg','.json')
+    os.makedirs(os.path.dirname(des_path), exist_ok=True)
+    with open(des_path, 'w') as f:
+        json.dump(lm_data.tolist(), f)
+        
+    
+    
+    
     
 
 # parser = argparse.ArgumentParser()

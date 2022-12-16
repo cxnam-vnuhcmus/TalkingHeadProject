@@ -158,7 +158,7 @@ data:
             random_crop_h_w: 512, 512
     val:        
         roots:
-            - datasets/test
+            - datasets/val
         batch_size: 1        
         augmentations:            
             resize_h_w: 512, 512
@@ -196,7 +196,7 @@ test_data:
     test:
         is_lmdb: False
         roots:            
-            - datasets/val
+            - datasets/test
         batch_size: 1        
         augmentations:            
             resize_h_w: 512, 512

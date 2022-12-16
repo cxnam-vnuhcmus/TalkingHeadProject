@@ -232,8 +232,8 @@ test_data:
     test:
         is_lmdb: False
         roots:            
-            - ../results/imaginaire/MEAD_A13L74_S256/reference
-            - ../results/imaginaire/MEAD_A13L74_S256/driving
+            - datasets/reference
+            - datasets/test
         batch_size: 1        
         augmentations:            
             resize_smallest_side: 1024
