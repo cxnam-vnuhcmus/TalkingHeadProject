@@ -71,7 +71,7 @@ class A2GIWSI_GAN(nn.Module):
             # nn.BatchNorm1d(1024 * 2),
             nn.LeakyReLU(0.2),
             )
-        self.lstm = nn.LSTM(2048,2048,3,batch_first = True)
+        self.lstm = nn.LSTM(2048*2,2048,3,batch_first = True)
     
         with torch.no_grad():
             self.vae = GrayImage_VAE()
@@ -102,17 +102,23 @@ class A2GIWSI_GAN(nn.Module):
             print(self.__class__.__name__ + " Parameters: %.3fM" % parameters)
         return parameters 
     
-    def forward(self, audio):
+    def forward(self, audio, real_img):
         hidden = ( torch.autograd.Variable(torch.zeros(3, audio.size(0), 2048).cuda()),
                       torch.autograd.Variable(torch.zeros(3, audio.size(0), 2048).cuda()))
         
+        with torch.no_grad():
+            sample_img = real_img[:,0:1,:,:]    #1,1,256,256
+            sample_feature = self.vae.extract_feature(sample_img)   #1,1,512,2,2
+            sample_feature = sample_feature.view(-1).unsqueeze(0)
+            
         lstm_input = []
         for step_t in range(audio.size(1)):
             current_audio = audio[ : ,step_t , :, :].unsqueeze(1)   #1,1,28,12
             current_feature = self.audio_eocder(current_audio)      #1,512,12,2
             current_feature = current_feature.view(current_feature.size(0), -1) #1,512*12*2
             current_feature = self.audio_eocder_fc(current_feature) #1,512*2*2
-            lstm_input.append(current_feature)
+            features = torch.cat([sample_feature, current_feature], 1)
+            lstm_input.append(features)
                 
         lstm_input_torch = torch.stack(lstm_input, dim = 1)         #1,25,512*2*2
         lstm_out, _ = self.lstm(lstm_input_torch, hidden)           #1,25,512*2*2
@@ -165,7 +171,7 @@ class A2GIWSI_GAN(nn.Module):
             if torch.cuda.is_available():
                 audio,real_img = audio.cuda(), real_img.cuda()    #x = 1,25,28,12; y = 1,25,256,256
             
-            fake_feature = self(audio)  #1,25,512,2,2
+            fake_feature = self(audio, real_img)  #1,25,512,2,2
             fake_feature = fake_feature.reshape(-1, *fake_feature.shape[2:])
             with torch.no_grad():
                 real_img = real_img.view(-1, 1, real_img.shape[2], real_img.shape[3]) #25,1,256,256
@@ -228,14 +234,16 @@ class A2GIWSI_GAN(nn.Module):
             if torch.cuda.is_available():
                 audio,real_img = audio.cuda(), real_img.cuda()    
 
-            fake_img = self.generator(audio)          #pred: 1,25,1,256,256
-            fake_img = fake_img.squeeze(2)
-
+            fake_feature = self(audio)  #1,25,512,2,2
+            fake_feature = fake_feature.reshape(-1, *fake_feature.shape[2:])
+            with torch.no_grad():
+                fake_img = self.vae.decoder(fake_feature) #25,1,256,256
+                fake_img = fake_img.reshape(-1,256,256)
             # loss = self.criterion(pred, y)      
             # print(f'Loss: {loss}')
             # print(pred.shape)
             
-            videoframes = fake_img[0].cpu().detach().numpy()
+            videoframes = fake_img.cpu().detach().numpy()
             videoframes =(videoframes * 255).astype(np.uint8)
             create_video(videoframes,f'{args.save_path}/prediction.mp4')
             
