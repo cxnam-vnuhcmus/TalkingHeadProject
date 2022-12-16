@@ -17,7 +17,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--train_dataset_path', type=str, default='data/train_MEAD.json')
 parser.add_argument('--val_dataset_path', type=str, default='data/val_MEAD.json')
 
-parser.add_argument('--batch_size', type=int, default=1)
+parser.add_argument('--batch_size', type=int, default=4)
 parser.add_argument('--generator_lr', type=float, default=1.0e-4)
 parser.add_argument('--discriminator_lr', type=float, default=1.0e-4)
 parser.add_argument('--n_epoches', type=int, default=20)
@@ -65,10 +65,8 @@ class A2GIWSI_GAN(nn.Module):
             )
         self.audio_eocder_fc = nn.Sequential(
             nn.Linear(1024 * 12, 1024 * 6),
-            # nn.BatchNorm1d(1024 * 6),
             nn.LeakyReLU(0.2),
             nn.Linear(1024 * 6, 1024 * 2),
-            # nn.BatchNorm1d(1024 * 2),
             nn.LeakyReLU(0.2),
             )
         self.lstm = nn.LSTM(2048*2,2048,3,batch_first = True)
@@ -109,7 +107,7 @@ class A2GIWSI_GAN(nn.Module):
         with torch.no_grad():
             sample_img = real_img[:,0:1,:,:]    #1,1,256,256
             sample_feature = self.vae.extract_feature(sample_img)   #1,1,512,2,2
-            sample_feature = sample_feature.view(-1).unsqueeze(0)
+            sample_feature = sample_feature.view(sample_feature.shape[0], -1)
             
         lstm_input = []
         for step_t in range(audio.size(1)):
@@ -201,7 +199,7 @@ class A2GIWSI_GAN(nn.Module):
             if torch.cuda.is_available():
                 audio,real_img = audio.cuda(), real_img.cuda()    #x = 1,25,28,12; y = 1,25,256,256
                 
-            fake_feature = self(audio)  #1,25,512,2,2
+            fake_feature = self(audio, real_img)  #1,25,512,2,2
             fake_feature = fake_feature.reshape(-1, *fake_feature.shape[2:])
             with torch.no_grad():
                 real_img = real_img.view(-1, 1, real_img.shape[2], real_img.shape[3]) #25,1,256,256
@@ -234,7 +232,7 @@ class A2GIWSI_GAN(nn.Module):
             if torch.cuda.is_available():
                 audio,real_img = audio.cuda(), real_img.cuda()    
 
-            fake_feature = self(audio)  #1,25,512,2,2
+            fake_feature = self(audio, real_img)  #1,25,512,2,2
             fake_feature = fake_feature.reshape(-1, *fake_feature.shape[2:])
             with torch.no_grad():
                 fake_img = self.vae.decoder(fake_feature) #25,1,256,256
