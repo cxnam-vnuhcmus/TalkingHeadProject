@@ -648,7 +648,7 @@ def read_data_from_path(mfcc_path=None, lm_path=None, face_path=None, start=None
             except Exception as e:
                 print(f'{face_path} | {index}')
             image = imageio.imread(face_file)
-            image = image / 255.0
+            # image = image / 255.0
             face_data_list.append([image])
         face_data_list = np.vstack(face_data_list).astype(np.float32)
     return {
@@ -803,3 +803,30 @@ class VGGLoss(nn.Module):
             this_loss = (self.weights[i] * self.criterion(x_vgg[i], y_vgg[i].detach()))
             loss += this_loss
         return loss
+    
+def calculate_segmap(img, newlm):
+    result = np.zeros_like(img).astype(np.uint8)
+    seg_img = img.copy()
+    pts = np.array([np.column_stack((newlm[48:60,0], newlm[48:60,1]))], np.int32)
+    pts = pts.reshape((-1,1,2))
+    cv2.fillPoly(seg_img, [pts],(0,0,0))
+    pts = np.array([np.column_stack((newlm[36:42,0], newlm[36:42,1]))], np.int32)
+    pts = pts.reshape((-1,1,2))
+    cv2.fillPoly(seg_img, [pts],(0,0,0))
+    pts = np.array([np.column_stack((newlm[42:48,0], newlm[42:48,1]))], np.int32)
+    pts = pts.reshape((-1,1,2))
+    cv2.fillPoly(seg_img, [pts],(0,0,0))
+
+    minface = np.max(newlm[:,1], axis=0)
+    seg_img[minface:,:] = 0
+    seg_img = 255-seg_img
+    seg_img[seg_img==255] = 0
+    
+    segment = 255//10
+    for index, i in enumerate(range(0,255,segment)):
+        mask = np.bitwise_and((i < seg_img), (seg_img < i + segment))
+        result[mask == True] = index + 1
+    
+    result = cv2.medianBlur(result,7)  
+    result = cv2.resize(result, (64,64), interpolation=cv2.INTER_NEAREST)  
+    return result
