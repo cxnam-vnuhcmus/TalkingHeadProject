@@ -828,5 +828,5 @@ def calculate_segmap(img, newlm):
         result[mask == True] = index + 1
     
     result = cv2.medianBlur(result,7)  
-    result = cv2.resize(result, (64,64), interpolation=cv2.INTER_NEAREST)  
+    # result = cv2.resize(result, (64,64), interpolation=cv2.INTER_NEAREST)  
     return result
