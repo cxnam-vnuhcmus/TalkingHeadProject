@@ -226,19 +226,17 @@ class A2GI_Conv(nn.Module):
             loss = self.criterion(lm_pred, lm_gt)      
             print(f'Loss: {loss}')
             
-            lm_pred = lm_pred.reshape(-1,68,2)
+            lm_pred = lm_pred.reshape(-1,64,64)
             lm_pred = lm_pred.cpu().detach().numpy()
-            outputs_pred = connect_face_keypoints(256,256,lm_pred)
             
-            lm_gt = lm_gt.reshape(lm_gt.shape[0],68,2)
+            lm_gt = lm_gt.reshape(lm_gt.shape[0],64,64)
             lm_gt = lm_gt.cpu().detach().numpy()
-            outputs_gt = connect_face_keypoints(256,256,lm_gt)
             
             outputs = []
-            for i in range(len(outputs_gt)):
-                result_img = np.zeros((256, 256*2, 1))
-                result_img[:,:256,:] = outputs_gt[i] * 255
-                result_img[:,256:,:] = outputs_pred[i] * 255
+            for i in range(len(lm_pred)):
+                result_img = np.zeros((64, 64*2))
+                result_img[:,:64] = lm_gt[i]
+                result_img[:,64:] = lm_pred[i]
                 outputs.append(result_img)
             
             create_video(outputs,f'{args.save_path}/prediction.mp4', fps=10)
