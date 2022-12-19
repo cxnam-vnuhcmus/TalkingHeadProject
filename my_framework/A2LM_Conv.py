@@ -19,8 +19,8 @@ parser.add_argument('--batch_size', type=int, default=32)
 parser.add_argument('--learning_rate', type=float, default=1.0e-4)
 parser.add_argument('--n_epoches', type=int, default=500)
 
-parser.add_argument('--save_path', type=str, default='result_A2LM_LSTM')
-parser.add_argument('--use_pretrain', type=bool, default=True)
+parser.add_argument('--save_path', type=str, default='result_A2LM_Temp')
+parser.add_argument('--use_pretrain', type=bool, default=False)
 parser.add_argument('--train', action='store_true')
 args = parser.parse_args()
 

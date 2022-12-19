@@ -5,6 +5,8 @@ import sys
 import random
 import datetime
 import torch
+import torchvision
+import torchvision.transforms.functional as fn
 from torch import nn, optim, sigmoid
 from torch.nn import functional as F
 from torch.utils.data import Dataset, DataLoader
@@ -20,8 +22,9 @@ parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--generator_lr', type=float, default=1.0e-4)
 parser.add_argument('--discriminator_lr', type=float, default=1.0e-4)
 parser.add_argument('--n_epoches', type=int, default=50)
+parser.add_argument('--n_scale', type=int, default=3)
 
-parser.add_argument('--save_path', type=str, default='result_A2GIWSI_GAN')
+parser.add_argument('--save_path', type=str, default='result_A2GIWSI_GAN4')
 parser.add_argument('--use_pretrain', type=bool, default=False)
 parser.add_argument('--train', action='store_true')
 args = parser.parse_args()
@@ -39,7 +42,7 @@ class FaceDataset(Dataset):
         # if args.train:       
         data = read_data_from_path(mfcc_path=parts[0], lm_path=parts[1], face_path = parts[2], start=parts[3], end=parts[4])
         # else:
-        #     data = read_data_from_path(mfcc_path=parts[0], face_path = parts[2])
+        # data = read_data_from_path(mfcc_path=parts[0], lm_path=parts[1], face_path = parts[2])
         lms = data['lm_data_list']
         imgs = data['face_data_list']
         
@@ -54,7 +57,7 @@ class FaceDataset(Dataset):
 
     def __len__(self):
         # return len(self.data_path)
-        return 10
+        return 1000
     
 class A2GIWSI_Generator(nn.Module):
     def __init__(self):
@@ -78,23 +81,26 @@ class A2GIWSI_Generator(nn.Module):
         self.lstm = nn.LSTM(512,256,3,batch_first = True)
     
         self.audio_decode_fc_layers = []
-        for i in range(4,0,-1):
+        for i in range(1,args.n_scale+1):
             layer = nn.Sequential(
                 nn.Linear(min(256,32*(2**i)), min(256,32*(2**(i-1)))),
                 nn.ReLU(True),
             )
             self.audio_decode_fc_layers.append(layer)
+        self.audio_decode_fc_layers.reverse()
+        self.audio_decode_fc_layers = nn.ModuleList(self.audio_decode_fc_layers)
         
-        self.first_conv = SameBlock2d(1, min(256,32*(2**i)))
+        self.first_conv = SameBlock2d(1, 256)
         
         self.segmap_decode_layers = []
-        for i in range(3,0,-1):
+        for i in range(args.n_scale,0,-1):
             if len(self.segmap_decode_layers) == 0:
-                layer = SameBlock2d(min(256,32*(2**i)), min(256,32*(2**(i-1))))
+                layer = SameBlock2d(1, min(256,32*(2**(i-1))))
             else:
                 layer = UpBlock2d(min(256,32*(2**i)), min(256,32*(2**(i-1))))
             self.segmap_decode_layers.append(layer)
-
+        self.segmap_decode_layers = nn.ModuleList(self.segmap_decode_layers)
+        
         self.last_conv = SameBlock2d(32, 1)
         
         self.init_model()
@@ -125,27 +131,34 @@ class A2GIWSI_Generator(nn.Module):
             lstm_out, hidden = self.lstm(current_feature, hidden)   #1,1,256
             
             lstm_out = lstm_out.view(-1, lstm_out.shape[1] * lstm_out.shape[2]) #1,256
-            
             audio_outs = [lstm_out]
             for layer in self.audio_decode_fc_layers:
                 out = layer(audio_outs[-1])
-                audio_outs.append(out)
+                audio_outs.append(out)  #1,256; 1,128; 1,64; 1,32
 
+            
+            noise = torch.rand(1,1,32,32)
+            if torch.cuda.is_available():
+                noise = noise.cuda()
+            
             segmap_outs = []
-            noise = torch.rand(1,32,32)
-            out = self.first_conv(noise)    #256,32,32
-            segmap_outs.append(out)
-            for layer in self.segmap_decode_layers: #128,64,64 -> 64,128,128 -> 32,256,256
-                out = layer(segmap_outs[-1])
-            out = self.last_conv(segmap_outs[-1])    #1,256,256
-            segmap_outs.append(out)
-            gen_outs.append(segmap_outs)
-        
+            for layer in self.segmap_decode_layers: 
+                if len(segmap_outs) == 0:
+                    out = layer(noise)    
+                else:
+                    out = layer(segmap_outs[-1])
+                segmap_outs.append(out)     #1,256,32,32 -> 1,128,64,64 -> 1,64,128,128 -> 1,32,256,256       
+            
+            if step_t == 0:
+                gen_outs = segmap_outs
+            else:
+                for i in range(len(segmap_outs)):
+                    gen_outs[i] = torch.vstack([gen_outs[i], segmap_outs[i]])   #25,256,32,32 -> 25,128,64,64 -> 25,64,128,128 ->25,32,256,256       
         return gen_outs
                     
 
 class A2GIWSI_Discriminator(nn.Module):
-    def __init__(self, input_shape):
+    def __init__(self, input_shape):    #256,32,32
         super().__init__()
 
         self.down_blocks = []
@@ -157,6 +170,7 @@ class A2GIWSI_Discriminator(nn.Module):
             
         last_layer = SameBlock2d(channel,1)
         self.down_blocks.append(last_layer)
+        self.down_blocks = nn.ModuleList(self.down_blocks)
 
         self.fc_blocks = []
         for i in range(3):
@@ -172,6 +186,7 @@ class A2GIWSI_Discriminator(nn.Module):
                 nn.Sigmoid()
             )
         self.fc_blocks.append(last_fc_layer)
+        self.fc_blocks = nn.ModuleList(self.fc_blocks)
         
         self.init_model()
         self.num_params()
@@ -187,30 +202,51 @@ class A2GIWSI_Discriminator(nn.Module):
             print(self.__class__.__name__ + " Parameters: %.3fM" % parameters)
         return parameters 
               
-    def forward(self, fake, real):
-        for i in range(len(self.down_blocks)):
-            layer = self.down_blocks[i]
-            if i == 0:
-                out = layer(fake)
-            else:
-                out = layer(out)
+    def forward(self, image):
+        if image.shape[1] > 1:
+            for i in range(len(self.down_blocks)):  #25,256,x,x
+                layer = self.down_blocks[i]
+                if i == 0:
+                    out = layer(image)
+                else:
+                    out = layer(out)
+        else:
+            out = image.view(image.shape[0], -1)
         
-        out = torch.cat([out, real])
-         
-        for i in range(len(self.fc_blocks)):
+        out = out.view(out.shape[0],-1)         #25,1*x*x
+        for i in range(len(self.fc_blocks)):    
             layer = self.fc_blocks[i]
             if i == 0:
                 out = layer(out)
             else:
                 out = layer(out)
-        return out        
+
+        return out                              #25,1
     
-            
+class A2GIWSI_MultiPatch_Discriminator(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        discriminators = []
+        for i in range(args.n_scale):
+            discriminator = A2GIWSI_Discriminator((32*(2**i),32*(2**(args.n_scale-1))//(2**i),32*(2**(args.n_scale-1))//(2**i)))
+            discriminators.append(discriminator)
+        discriminators.reverse()
+        self.discriminators = nn.ModuleList(discriminators)
+        
+    def forward(self, image):
+        discriminator_out = []
+        for i in range(args.n_scale):
+            layer = self.discriminators[i]
+            out = layer(image[i])
+            discriminator_out.append(out)
+        return discriminator_out
+        
 class A2GIWSI_GAN(nn.Module):
     def __init__(self):
         super().__init__()
         self.generator = A2GIWSI_Generator()
-        self.discriminator = A2GIWSI_Discriminator()
+        self.discriminator = A2GIWSI_MultiPatch_Discriminator()
         if torch.cuda.is_available():
             self.generator = self.generator.cuda()
             self.discriminator = self.discriminator.cuda()
@@ -292,36 +328,34 @@ class A2GIWSI_GAN(nn.Module):
             
             real_img_scale = []
             nlayer = 10
-            real_img = real_img.view(-1,1,256,256)
-            for i in range(3):
+            real_img = real_img.view(-1,1,256,256)  #25,1,256,256
+            for i in range(args.n_scale,0,-1):
                 real_img_list = []
                 for image in real_img:
-                    img_copy = image.copy()
-                    img_copy[img_copy < nlayer] = 0
-                    img_copy[img_copy >= nlayer] = 1
+                    img_copy = image.clone()
+                    img_copy[img_copy < nlayer - args.n_scale + i] = 0
+                    img_copy[img_copy >= nlayer - args.n_scale + i] = 1
+                    img_copy = fn.resize(img_copy, real_img.shape[-1]*(2**(args.n_scale-3))//(2**i))
                     real_img_list.append(img_copy)
                 real_img_list = torch.stack(real_img_list)
-                real_img_scale.append(real_img_list)
-                nlayer = nlayer - 1
-                
+                real_img_scale.append(real_img_list)    #25,1,256,256; 25,1,128,128; 25,1,64,64; 25,1,32,32
+            # real_img_scale.reverse()   #25,1,32,32; 25,1,64,64; 25,1,128,128; 25,1,256,256
+            
             #train discriminator
             self.generator.eval()
             self.discriminator.train()
             
             with torch.no_grad():
-                gen_outs = self.generator(audio)    
+                gen_outs = self.generator(audio)    #25,256,32,32 -> 25,128,64,64 -> 25,64,128,128 -> 25,32,256,256       
             
-            fake_label = self.discriminator(gen_outs, real_img_scale)  
-                        
-            ones = torch.ones(real_label.shape[0],1)
-            zeros = torch.zeros(fake_label.shape[0],1)
-            real_label = torch.cat([ones, zeros])
-            
-            if torch.cuda.is_available():
-                real_label = real_label.cuda()
-
+            fake_label = self.discriminator(gen_outs)
+            real_label = self.discriminator(real_img_scale)  
+                                
             self.discriminator_optimizer.zero_grad()       
-            discriminator_loss = self.criterion(fake_label, real_label)
+            discriminator_loss = 0
+            for i in range(args.n_scale):
+                value = (1 - real_label[i]) ** 2 +  fake_label[i] ** 2
+                discriminator_loss += value.mean()
             discriminator_loss.backward()
             self.discriminator_optimizer.step()
             
@@ -329,15 +363,14 @@ class A2GIWSI_GAN(nn.Module):
             self.generator.train()
             self.discriminator.eval()
             
-            gen_outs = self.generator(audio, None)   
-            
-            ones = torch.ones(real_label.shape[0],1)
-            real_label = torch.cat([ones])
-            
-            fake_label = self.discriminator(gen_outs, real_label)
+            gen_outs = self.generator(audio)   
+            fake_label = self.discriminator(gen_outs)
             
             self.generator_optimizer.zero_grad()
-            generator_loss = self.criterion(fake_label, ones)
+            generator_loss = 0
+            for i in range(args.n_scale):
+                value = fake_label[i] ** 2
+                generator_loss += value.mean()*100
             generator_loss.backward()
             self.generator_optimizer.step()
             
@@ -360,36 +393,37 @@ class A2GIWSI_GAN(nn.Module):
             
             real_img_scale = []
             nlayer = 10
-            for i in range(3):
-                real_img[real_img < nlayer] = 0
-                real_img[real_img >= nlayer] = 1
-                nlayer = nlayer - 1
-                
+            real_img = real_img.view(-1,1,256,256)  #25,1,256,256
+            for i in range(args.n_scale,0,-1):
+                real_img_list = []
+                for image in real_img:
+                    img_copy = image.clone()
+                    img_copy[img_copy < nlayer - args.n_scale + i] = 0
+                    img_copy[img_copy >= nlayer - args.n_scale + i] = 1
+                    img_copy = fn.resize(img_copy, real_img.shape[-1]*(2**(args.n_scale-3))//(2**i))
+                    real_img_list.append(img_copy)
+                real_img_list = torch.stack(real_img_list)
+                real_img_scale.append(real_img_list)    #25,1,256,256; 25,1,128,128; 25,1,64,64; 25,1,32,32
+            # real_img_scale.reverse()   #25,1,32,32; 25,1,64,64; 25,1,128,128; 25,1,256,256
             
+            #generator
             self.generator.eval()
             self.discriminator.eval()
             
-            fake_img = self.generator(audio)    #1,25,1,256,256
-            fake_img = fake_img.squeeze(2)      #1,25,256,256
+            gen_outs = self.generator(audio)    
             
-            fake_img = fake_img.reshape(-1,1,fake_img.shape[2],fake_img.shape[3])   #25,1,256,256
-            real_img = real_img.reshape(-1,1,real_img.shape[2],real_img.shape[3])
+            fake_label = self.discriminator(gen_outs)
+            real_label = self.discriminator(real_img_scale)  
+                
+            discriminator_loss = 0
+            for i in range(args.n_scale):
+                value = (1 - real_label[i]) ** 2 +  fake_label[i] ** 2
+                discriminator_loss += value.mean()
             
-            fake_label = self.discriminator(fake_img)
-            real_label = self.discriminator(real_img)
-            
-            ones = torch.ones(real_label.shape)
-            zeros = torch.zeros(fake_label.shape)
-            if torch.cuda.is_available():
-                ones = ones.cuda()
-                zeros = zeros.cuda()
-            discriminator_real_loss = self.criterion(real_label, ones)
-            discriminator_fake_loss = self.criterion(fake_label, zeros)
-            discriminator_loss = discriminator_real_loss + discriminator_fake_loss
-
-            generator_bce_loss = self.criterion(fake_label, ones)
-            generator_ssiml1_loss = self.ssiml1_loss(fake_img, real_img)
-            generator_loss = generator_bce_loss + generator_ssiml1_loss
+            generator_loss = 0
+            for i in range(args.n_scale):
+                value = fake_label[i] ** 2
+                generator_loss += value.mean()
             
             #Summary        
             G_Loss += generator_loss.item()
