@@ -23,7 +23,6 @@ parser.add_argument('--generator_lr', type=float, default=1.0e-4)
 parser.add_argument('--discriminator_lr', type=float, default=1.0e-4)
 parser.add_argument('--n_epoches', type=int, default=50)
 parser.add_argument('--n_scale', type=int, default=3)
-parser.add_argument('--base_size', type=int, default=32)
 
 parser.add_argument('--save_path', type=str, default='result_A2GIWSI_GAN4')
 parser.add_argument('--use_pretrain', type=bool, default=False)
@@ -40,39 +39,21 @@ class FaceDataset(Dataset):
     def __getitem__(self, index):
         rand_index = random.choice(range(len(self.data_path)))
         parts = self.data_path[rand_index].split('|') 
-        print(parts)
         # if args.train:       
-        # data = read_data_from_path(mfcc_path=parts[0], lm_path=parts[1], face_path = parts[2], start=parts[3], end=parts[4])
+        data = read_data_from_path(mfcc_path=parts[0], lm_path=parts[1], face_path = parts[2], start=parts[3], end=parts[4])
         # else:
-        data = read_data_from_path(mfcc_path=parts[0], lm_path=parts[1], face_path = parts[2])
-        print(data)
-        
+        # data = read_data_from_path(mfcc_path=parts[0], lm_path=parts[1], face_path = parts[2])
         lms = data['lm_data_list']
         imgs = data['face_data_list']
         
-        image_pyramid_list = []
+        faces = []
         for i in range(len(imgs)):
             lm = lms[i].reshape(68,2).astype(int)
-            segmap = calculate_segmap(imgs[i], lm)            
+            result = calculate_segmap(imgs[i], lm)
+            result = torch.from_numpy(result.reshape(-1))
+            faces.append(result)
             
-            nlayer = [11,9,5,1]
-            image_pyramid = []
-            segmap = segmap.view(-1,256,256)  #1,256,256
-            for i in range(args.n_scale):
-                img_copy = segmap.clone()
-                img_copy[img_copy < nlayer[i]] = 0
-                img_copy[img_copy >= nlayer[i]] = 1
-                img_copy = fn.resize(img_copy, args.base_size * (2**i))
-                print(segmap.shape)
-                image_pyramid.append(torch.from_numpy(img_copy))      #1,32,32; 1,64,64; 1,128,128
-            
-            if len(image_pyramid_list) == 0:
-                image_pyramid_list = image_pyramid
-            else:
-                for i in range(args.n_scale):
-                    image_pyramid_list[i] = torch.stack([image_pyramid_list[i], image_pyramid])
-            
-        return torch.from_numpy(data['mfcc_data_list']), image_pyramid_list
+        return torch.from_numpy(data['mfcc_data_list']), torch.stack(faces)
 
     def __len__(self):
         # return len(self.data_path)
@@ -264,27 +245,23 @@ class A2GIWSI_MultiPatch_Discriminator(nn.Module):
 class A2GIWSI_GAN(nn.Module):
     def __init__(self):
         super().__init__()
-        self.generator = A2GIWSI_Generator()
-        self.discriminator = A2GIWSI_MultiPatch_Discriminator()
-        # if torch.cuda.is_available():
-        #     self.generator = self.generator.cuda()
-        #     self.discriminator = self.discriminator.cuda()
-        
-        print("init dataset")
         self.train_dataset = FaceDataset(args.train_dataset_path)
         self.val_dataset = FaceDataset(args.val_dataset_path)
         
-        print("init dataloader")
         self.train_dataloader = DataLoader(self.train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=True)
         self.val_dataloader = DataLoader(self.val_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=True)
         
-        print("init loss and optim")
         self.criterion = nn.BCELoss()
         self.ssiml1_loss = MS_SSIM_L1_LOSS()
         self.generator_optimizer = optim.Adam(self.parameters(), lr = args.generator_lr)
         self.discriminator_optimizer = optim.Adam(self.parameters(), lr = args.discriminator_lr)
+        
+        self.generator = A2GIWSI_Generator()
+        self.discriminator = A2GIWSI_MultiPatch_Discriminator()
+        if torch.cuda.is_available():
+            self.generator = self.generator.cuda()
+            self.discriminator = self.discriminator.cuda()
             
-        print("init model")
         self.init_model()
         self.num_params()
     
@@ -318,8 +295,6 @@ class A2GIWSI_GAN(nn.Module):
             train_G_loss.append(train_G_Loss_running)
             train_D_loss.append(train_D_Loss_running)
             
-            break
-        
             print(f'\nValidate epoch {epoch}:\n')
             val_G_Loss_running, val_D_Loss_running = self.validate_epoch(epoch)
             val_G_loss.append(val_G_Loss_running)
@@ -336,13 +311,12 @@ class A2GIWSI_GAN(nn.Module):
                 print(f"\nSave the best model (epoch: {epoch})\n")
                 save_model(self, epoch, None, f'{args.save_path}/best_model.pt')
                 best_running_loss = val_G_Loss_running
-        
-        # #Save last model
-        # print(f"\nSave the last model (epoch: {epoch})\n")
-        # save_model(self, epoch, None, f'{args.save_path}/last_model.pt')
+        #Save last model
+        print(f"\nSave the last model (epoch: {epoch})\n")
+        save_model(self, epoch, None, f'{args.save_path}/last_model.pt')
 
-        # #Save plot
-        # save_plots(train_G_loss, val_G_loss, train_D_loss, val_D_loss, args.save_path)
+        #Save plot
+        save_plots(train_G_loss, val_G_loss, train_D_loss, val_D_loss, args.save_path)
         
     def train_epoch(self, epoch):
         self.train()        
@@ -350,12 +324,22 @@ class A2GIWSI_GAN(nn.Module):
         D_Loss = 0
         for step, (audio,real_img) in enumerate(self.train_dataloader):            
             if torch.cuda.is_available():
-                audio,real_img = audio.cuda(), real_img.cuda()    #x = 1,25,28,12; y = 1,25,256,256
+                audio,real_img = audio.cuda(), real_img.type(torch.FloatTensor).cuda()    #x = 1,25,28,12; y = 1,25,256,256
             
-            for i in range(len(real_img)):
-                print(real_img[i].shape)
+            real_img_scale = []
+            nlayer = 10
+            real_img = real_img.view(-1,1,256,256)  #25,1,256,256
+            for i in range(args.n_scale,0,-1):
+                real_img_list = []
+                for image in real_img:
+                    img_copy = image.clone()
+                    img_copy[img_copy < nlayer - args.n_scale + i] = 0
+                    img_copy[img_copy >= nlayer - args.n_scale + i] = 1
+                    img_copy = fn.resize(img_copy, real_img.shape[-1]*(2**(args.n_scale-3))//(2**i))
+                    real_img_list.append(img_copy)
+                real_img_list = torch.stack(real_img_list)
+                real_img_scale.append(real_img_list)    #25,1,32,32; 25,1,64,64; 25,1,128,128; 25,1,256,256
             
-            break
             #train discriminator
             self.generator.eval()
             self.discriminator.train()
@@ -469,9 +453,9 @@ class A2GIWSI_GAN(nn.Module):
             
 if __name__ == '__main__': 
     net = A2GIWSI_GAN()
-    # if args.train:
-    #     net.train_all()
-    # else:
-    #     net.load_model()
-    #     net.inference()
+    if args.train:
+        net.train_all()
+    else:
+        net.load_model()
+        net.inference()
         
