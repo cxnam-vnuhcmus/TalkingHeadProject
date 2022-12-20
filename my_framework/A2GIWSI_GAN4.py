@@ -70,7 +70,7 @@ class FaceDataset(Dataset):
                 image_pyramid_list = image_pyramid
             else:
                 for i in range(args.n_scale):
-                    image_pyramid_list[i] = torch.stack([image_pyramid_list[i], image_pyramid])
+                    image_pyramid_list[i] = torch.stack([image_pyramid_list[i], image_pyramid]) #25,1,32,32; 25,1,64,64; 25,1,128,128
             
         return torch.from_numpy(data['mfcc_data_list']), image_pyramid_list
 
@@ -100,27 +100,32 @@ class A2GIWSI_Generator(nn.Module):
         self.lstm = nn.LSTM(512,256,3,batch_first = True)
     
         self.audio_decode_fc_layers = []
-        for i in range(1,args.n_scale+1):
-            layer = nn.Sequential(
-                nn.Linear(min(256,32*(2**i)), min(256,32*(2**(i-1)))),
-                nn.ReLU(True),
-            )
+        for i in range(args.n_scale,0,-1):
+            if len(self.audio_decode_fc_layers) == 0:
+                layer = nn.Sequential(
+                    nn.Linear(256, args.base_size * (2**(i-1))),
+                    nn.ReLU(True),
+                )
+            else:
+                layer = nn.Sequential(
+                    nn.Linear(args.base_size * (2**i), args.base_size * (2**(i-1))),
+                    nn.ReLU(True),
+                )
             self.audio_decode_fc_layers.append(layer)
-        self.audio_decode_fc_layers.reverse()
         self.audio_decode_fc_layers = nn.ModuleList(self.audio_decode_fc_layers)
-        
-        self.first_conv = SameBlock2d(1, 256)
         
         self.segmap_decode_layers = []
         for i in range(args.n_scale,0,-1):
             if len(self.segmap_decode_layers) == 0:
-                layer = SameBlock2d(1, min(256,32*(2**(i-1))))
+                layer = SameBlock2d(1, args.base_size * (2**(i-1)))
             else:
-                layer = UpBlock2d(min(256,32*(2**i)), min(256,32*(2**(i-1))))
+                layer = UpBlock2d(args.base_size * (2**i) + 1, args.base_size * (2**(i-1)))
             self.segmap_decode_layers.append(layer)
+            
+            layer = SameBlock2d(args.base_size * (2**(i-1)), 1)
+            self.segmap_decode_layers.append(layer)
+            
         self.segmap_decode_layers = nn.ModuleList(self.segmap_decode_layers)
-        
-        self.last_conv = SameBlock2d(32, 1)
         
         self.init_model()
         self.num_params()
@@ -160,19 +165,25 @@ class A2GIWSI_Generator(nn.Module):
             if torch.cuda.is_available():
                 noise = noise.cuda()
             
-            segmap_outs = []
-            for layer in self.segmap_decode_layers: 
-                if len(segmap_outs) == 0:
-                    out = layer(noise)    
+            segmap_out_up = []
+            segmap_out_down = []
+            for i in range(0, len(self.segmap_decode_layers), 2): 
+                up = self.segmap_decode_layers[i]
+                down = self.segmap_decode_layers[i+1]
+                if len(segmap_out_down) == 0:
+                    out_up = up(noise)    
+                    out_down = down(out_up)
                 else:
-                    out = layer(segmap_outs[-1])
-                segmap_outs.append(out)     #1,256,32,32 -> 1,128,64,64 -> 1,64,128,128 -> 1,32,256,256       
+                    out_up = up(torch.cat([segmap_out_up[-1], segmap_out_down[-1]], dim=1))    
+                    out_down = down(out_up)
+                segmap_out_up.append(out_up)        #1,128,32,32 -> 1,64,64,64 -> 1,32,128,128
+                segmap_out_down.append(out_down)    #1,1,32,32 -> 1,1,64,64 -> 1,1,128,128
             
             if step_t == 0:
-                gen_outs = segmap_outs
+                gen_outs = segmap_out_down
             else:
-                for i in range(len(segmap_outs)):
-                    gen_outs[i] = torch.vstack([gen_outs[i], segmap_outs[i]])   #25,256,32,32 -> 25,128,64,64 -> 25,64,128,128 ->25,32,256,256       
+                for i in range(len(segmap_out_down)):
+                    gen_outs[i] = torch.vstack([gen_outs[i], segmap_out_down[i]])   #25,1,32,32 -> 25,1,64,64 -> 25,1,128,128 ->25,1,256,256       
         return gen_outs
                     
 
@@ -182,30 +193,26 @@ class A2GIWSI_Discriminator(nn.Module):
 
         self.down_blocks = []
         channel,size = input_shape[0], input_shape[1]
-        for i in range(3):
-            layer = SameBlock2d(channel, channel//2)
+        while(size > args.base_size):
+            layer = DownBlock2d(channel, channel)
             self.down_blocks.append(layer)
-            channel = channel//2
-            
-        last_layer = SameBlock2d(channel,1)
-        self.down_blocks.append(last_layer)
+            size = size // 2            
         self.down_blocks = nn.ModuleList(self.down_blocks)
 
-        self.fc_blocks = []
-        for i in range(3):
-            layer = nn.Sequential(
-                nn.Linear(size**2, (size//2)**2),
-                nn.ReLU(True)
-            )
-            size = size//2
-            self.fc_blocks.append(layer)
-        
-        last_fc_layer = nn.Sequential(
-                nn.Linear(size**2, 1),
+        self.fc_blocks = nn.Sequential(
+                nn.Linear(1024, 512),
+                nn.ReLU(True),
+                nn.Linear(512, 512),
+                nn.ReLU(True),
+                nn.Linear(512, 512),
+                nn.ReLU(True),
+                nn.Linear(512, 256),
+                nn.ReLU(True),
+                nn.Linear(256, 256),
+                nn.ReLU(True),
+                nn.Linear(256, 1),
                 nn.Sigmoid()
             )
-        self.fc_blocks.append(last_fc_layer)
-        self.fc_blocks = nn.ModuleList(self.fc_blocks)
         
         self.init_model()
         self.num_params()
@@ -222,24 +229,17 @@ class A2GIWSI_Discriminator(nn.Module):
         return parameters 
               
     def forward(self, image):
-        if image.shape[1] > 1:
-            for i in range(len(self.down_blocks)):  #25,256,x,x
-                layer = self.down_blocks[i]
-                if i == 0:
-                    out = layer(image)
-                else:
-                    out = layer(out)
-        else:
-            out = image.view(image.shape[0], -1)
-        
-        out = out.view(out.shape[0],-1)         #25,1*x*x
-        for i in range(len(self.fc_blocks)):    
-            layer = self.fc_blocks[i]
+        for i in range(len(self.down_blocks)):  #25,1,X,X
+            layer = self.down_blocks[i]
             if i == 0:
-                out = layer(out)
+                out = layer(image)
             else:
                 out = layer(out)
-
+        
+        out = out.view(out.shape[0],-1)         #25,1*32*32
+        for i in range(len(self.fc_blocks)):    
+            layer = self.fc_blocks[i]
+            out = layer(out)
         return out                              #25,1
     
 class A2GIWSI_MultiPatch_Discriminator(nn.Module):
@@ -266,9 +266,9 @@ class A2GIWSI_GAN(nn.Module):
         super().__init__()
         self.generator = A2GIWSI_Generator()
         self.discriminator = A2GIWSI_MultiPatch_Discriminator()
-        # if torch.cuda.is_available():
-        #     self.generator = self.generator.cuda()
-        #     self.discriminator = self.discriminator.cuda()
+        if torch.cuda.is_available():
+            self.generator = self.generator.cuda()
+            self.discriminator = self.discriminator.cuda()
         
         print("init dataset")
         self.train_dataset = FaceDataset(args.train_dataset_path)
@@ -318,8 +318,6 @@ class A2GIWSI_GAN(nn.Module):
             train_G_loss.append(train_G_Loss_running)
             train_D_loss.append(train_D_Loss_running)
             
-            break
-        
             print(f'\nValidate epoch {epoch}:\n')
             val_G_Loss_running, val_D_Loss_running = self.validate_epoch(epoch)
             val_G_loss.append(val_G_Loss_running)
@@ -337,12 +335,12 @@ class A2GIWSI_GAN(nn.Module):
                 save_model(self, epoch, None, f'{args.save_path}/best_model.pt')
                 best_running_loss = val_G_Loss_running
         
-        # #Save last model
-        # print(f"\nSave the last model (epoch: {epoch})\n")
-        # save_model(self, epoch, None, f'{args.save_path}/last_model.pt')
+        #Save last model
+        print(f"\nSave the last model (epoch: {epoch})\n")
+        save_model(self, epoch, None, f'{args.save_path}/last_model.pt')
 
-        # #Save plot
-        # save_plots(train_G_loss, val_G_loss, train_D_loss, val_D_loss, args.save_path)
+        #Save plot
+        save_plots(train_G_loss, val_G_loss, train_D_loss, val_D_loss, args.save_path)
         
     def train_epoch(self, epoch):
         self.train()        
@@ -350,21 +348,20 @@ class A2GIWSI_GAN(nn.Module):
         D_Loss = 0
         for step, (audio,real_img) in enumerate(self.train_dataloader):            
             if torch.cuda.is_available():
-                audio,real_img = audio.cuda(), real_img.cuda()    #x = 1,25,28,12; y = 1,25,256,256
+                audio,real_img = audio.cuda(), real_img.cuda()    #x = 1,25,28,12; y = #25,1,32,32; 25,1,64,64; 25,1,128,128
             
             for i in range(len(real_img)):
                 print(real_img[i].shape)
             
-            break
             #train discriminator
             self.generator.eval()
             self.discriminator.train()
             
             with torch.no_grad():
-                gen_outs = self.generator(audio)    #25,256,32,32 -> 25,128,64,64 -> 25,64,128,128 -> 25,32,256,256       
+                gen_outs = self.generator(audio)    #25,1,32,32 -> 25,1,64,64 -> 25,1,128,128 ->25,1,256,256       
             
             fake_label = self.discriminator(gen_outs)
-            real_label = self.discriminator(real_img_scale)  
+            real_label = self.discriminator(real_img)  
                                 
             self.discriminator_optimizer.zero_grad()       
             discriminator_loss = 0
@@ -384,8 +381,9 @@ class A2GIWSI_GAN(nn.Module):
             self.generator_optimizer.zero_grad()
             generator_loss = 0
             for i in range(args.n_scale):
-                value = fake_label[i] ** 2
-                generator_loss += value.mean()*100
+                gan_loss = fake_label[i] ** 2
+                ssim_loss = MS_SSIM_L1_LOSS(gen_outs[i], real_img[i])
+                generator_loss += gan_loss.mean()*100 + ssim_loss*100
             generator_loss.backward()
             self.generator_optimizer.step()
             
@@ -404,30 +402,16 @@ class A2GIWSI_GAN(nn.Module):
         D_Loss = 0
         for step, (audio,real_img) in enumerate(self.val_dataloader):            
             if torch.cuda.is_available():
-                audio,real_img = audio.cuda(), real_img.type(torch.FloatTensor).cuda()    #x = 1,25,28,12; y = 1,25,256,256
-            
-            real_img_scale = []
-            nlayer = 10
-            real_img = real_img.view(-1,1,256,256)  #25,1,256,256
-            for i in range(args.n_scale,0,-1):
-                real_img_list = []
-                for image in real_img:
-                    img_copy = image.clone()
-                    img_copy[img_copy < nlayer - args.n_scale + i] = 0
-                    img_copy[img_copy >= nlayer - args.n_scale + i] = 1
-                    img_copy = fn.resize(img_copy, real_img.shape[-1]*(2**(args.n_scale-3))//(2**i))
-                    real_img_list.append(img_copy)
-                real_img_list = torch.stack(real_img_list)
-                real_img_scale.append(real_img_list)    #25,1,32,32; 25,1,64,64; 25,1,128,128; 25,1,256,256
-            
+                audio,real_img = audio.cuda(), real_img.type(torch.FloatTensor).cuda()    #x = 1,25,28,12; y = y = #25,1,32,32; 25,1,64,64; 25,1,128,128
+                        
             #generator
             self.generator.eval()
             self.discriminator.eval()
             
-            gen_outs = self.generator(audio)    
+            gen_outs = self.generator(audio)    #25,1,32,32 -> 25,1,64,64 -> 25,1,128,128 ->25,1,256,256       
             
             fake_label = self.discriminator(gen_outs)
-            real_label = self.discriminator(real_img_scale)  
+            real_label = self.discriminator(real_img)  
                 
             discriminator_loss = 0
             for i in range(args.n_scale):
@@ -436,8 +420,9 @@ class A2GIWSI_GAN(nn.Module):
             
             generator_loss = 0
             for i in range(args.n_scale):
-                value = fake_label[i] ** 2
-                generator_loss += value.mean()*100
+                gan_loss = fake_label[i] ** 2
+                ssim_loss = MS_SSIM_L1_LOSS(gen_outs[i], real_img[i])
+                generator_loss += gan_loss.mean()*100 + ssim_loss*100
             
             #Summary        
             G_Loss += generator_loss.item()
