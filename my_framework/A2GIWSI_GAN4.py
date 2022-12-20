@@ -158,8 +158,8 @@ class A2GIWSI_Generator(nn.Module):
             audio_outs = [lstm_out]
             for layer in self.audio_decode_fc_layers:
                 out = layer(audio_outs[-1])
-                audio_outs.append(out)  #1,256; 1,128; 1,64; 1,32
-
+                audio_outs.append(out)  
+            audio_outs.reverse()    #1,32; 1,64; 1,128; 1,256
             
             noise = torch.rand(1,1,32,32)
             if torch.cuda.is_available():
