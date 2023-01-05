@@ -3,26 +3,27 @@ channels:
   - defaults
 dependencies:
   - python=3.8
-  - torchaudio
   - torchvision
   - pytorch
-  - cudatoolkit=11.3
-  - wandb
   - tensorboard
   - opencv
-  - mlxtend
-  - dlib
   - scikit-image
   - cython
-  - cudatoolkit-dev
-  - albumentations
+  - cudatoolkit=11.3
   - scikit-learn
   - scipy
   - boto3
-  - diskcache
   - pytz
   - ipykernel
   - ipywidgets
   - pillow
-  - librosa
+  - pip:
+    - cudatoolkit-dev
+    - albumentations
+    - torchaudio
+    - diskcache
+    - mlxtend
+    - librosa
+    - dlib
+    - wandb
 prefix: /root/miniconda3/envs/talkinghead
