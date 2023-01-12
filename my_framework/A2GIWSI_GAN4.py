@@ -441,10 +441,15 @@ class A2GIWSI_GAN(nn.Module):
             self.cuda()
         with torch.no_grad():
             rand_index = random.choice(range(len(self.val_dataloader)))
-            audio,real_img = self.val_dataset[rand_index]      
-            audio,real_img = audio.unsqueeze(0), real_img.unsqueeze(0)    #x = 1,25,28,12; y = 1,25,256,256
+            audio,real_img = self.val_dataset[rand_index]     
+            audio = audio.unsqueeze(0)    #x = 1,25,28,12; y = 1,25,1,256,256
             if torch.cuda.is_available():
-                audio,real_img = audio.cuda(), real_img.cuda()    
+                audio = audio.cuda()     #1,25,28,12
+                for i in range(len(real_img)):
+                    real_img[i] = real_img[i].reshape(-1,*real_img[i].shape[2:])
+                    real_img[i] = real_img[i].type(torch.FloatTensor)
+                    real_img[i] = torch.autograd.Variable(real_img[i], requires_grad=True).cuda()  #25,1,32,32; 25,1,64,64; 25,1,128,128
+     
 
             gen_outs = self.generator(audio) #25,256,32,32 -> 25,128,64,64 -> 25,64,128,128 -> 25,32,256,256       
             
