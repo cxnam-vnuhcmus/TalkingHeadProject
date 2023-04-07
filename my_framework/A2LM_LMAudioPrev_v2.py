@@ -10,6 +10,7 @@ from torch.utils.data import Dataset, DataLoader
 from modules.util_module import *
 from modules.net_module import conv2d
 from modules.face_visual_module import connect_face_keypoints
+from evaluation.evaluation_landmark import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--train_dataset_path', type=str, default='data/train_MEAD.json')
@@ -19,7 +20,7 @@ parser.add_argument('--batch_size', type=int, default=32)
 parser.add_argument('--learning_rate', type=float, default=1.0e-4)
 parser.add_argument('--n_epoches', type=int, default=500)
 
-parser.add_argument('--save_path', type=str, default='result_A2LM_Conv')
+parser.add_argument('--save_path', type=str, default='result_A2LM_LMAudioPrev_v2')
 parser.add_argument('--use_pretrain', type=bool, default=False)
 parser.add_argument('--train', action='store_true')
 args = parser.parse_args()
@@ -30,7 +31,9 @@ class FaceDataset(Dataset):
         if path is not None:
             with open(path, 'r') as f:
                 self.data_path = json.load(f)
-
+        
+        torch.autograd.set_detect_anomaly(True)
+        
     def __getitem__(self, index):
         rand_index = random.choice(range(len(self.data_path)))
         parts = self.data_path[rand_index].split('|')        
@@ -43,36 +46,34 @@ class FaceDataset(Dataset):
 
     def __len__(self):
         return len(self.data_path)
-        # return 1000
+        # return 64
         
-class A2LM_LSTM(nn.Module):
+class A2LM_LMAudioPrev(nn.Module):
     def __init__(self):
         super().__init__()
-        self.audio_eocder = nn.Sequential(
-            conv2d(1,64,3,1,1),
-            conv2d(64,128,3,1,1),
-            nn.MaxPool2d(3, stride=(1,2)),
-            conv2d(128,256,3,1,1),
-            conv2d(256,256,3,1,1),
-            conv2d(256,512,3,1,1),
-            nn.MaxPool2d(3, stride=(2,2))
-            )
-        self.audio_eocder_fc = nn.Sequential(
-            nn.Linear(1024 *12,2048),
-            nn.ReLU(True),
-            nn.Linear(2048,512),
-            nn.ReLU(True),
-            )
-        self.lstm = nn.LSTM(512,256,3,batch_first = True)
+        self.input_size = 28*12
+        self.lm_hidden_size = 512
+        self.lm_num_layers = 3
+        self.audio_hidden_size = 512
+        self.audio_num_layers = 3
+        self.output_size = 68*2
         
-        self.fc = nn.Sequential(
-                nn.Linear(in_features=256, out_features=512),
-                nn.BatchNorm1d(512),
-                nn.LeakyReLU(0.2),
-                nn.Linear(512, 512),
-                nn.BatchNorm1d(512),
-                nn.LeakyReLU(0.2),
-                nn.Linear(512, 68*2))
+        self.audio_lstm = nn.LSTM(input_size=self.input_size,
+                            hidden_size=self.audio_hidden_size,
+                            num_layers=self.audio_num_layers,
+                            dropout=0,
+                            bidirectional=False,
+                            batch_first=True)
+        
+        self.lm_lstm = nn.LSTM(input_size=self.audio_hidden_size * 2,
+                            hidden_size=self.lm_hidden_size,
+                            num_layers=self.lm_num_layers,
+                            dropout=0,
+                            bidirectional=False,
+                            batch_first=True)
+        
+        self.fc1 = nn.Linear(self.lm_hidden_size, 256)
+        self.fc2 = nn.Linear(256, self.output_size)
         
         self.train_dataset = FaceDataset(args.train_dataset_path)
         self.val_dataset = FaceDataset(args.val_dataset_path)
@@ -80,7 +81,8 @@ class A2LM_LSTM(nn.Module):
         self.train_dataloader = DataLoader(self.train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=True)
         self.val_dataloader = DataLoader(self.val_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=True)
         
-        self.criterion = nn.MSELoss()
+        self.mseloss = nn.MSELoss()
+        # self.ctcloss = nn.CTCLoss(blank=0)
         self.optimizer = optim.Adam(self.parameters(), lr = args.learning_rate)
         
         self.init_model()
@@ -98,24 +100,19 @@ class A2LM_LSTM(nn.Module):
         return parameters 
     
     def forward(self, audio):
-        hidden = ( torch.autograd.Variable(torch.zeros(3, audio.size(0), 256).cuda()),
-                      torch.autograd.Variable(torch.zeros(3, audio.size(0), 256).cuda()))
-        
-        lstm_input = []
-        for step_t in range(audio.size(1)):
-            current_audio = audio[ : ,step_t , :, :].unsqueeze(1)   #1,1,28,12
-            current_feature = self.audio_eocder(current_audio)      #1,512,12,2
-            current_feature = current_feature.view(current_feature.size(0), -1) #1,512*12*2
-            current_feature = self.audio_eocder_fc(current_feature) #1,256
-            lstm_input.append(current_feature)
+        #audio: batch_size, seq_len, dim
+        audio_out,_ = self.audio_lstm(audio)
+        lm_in = torch.zeros((audio_out.shape[0], audio_out.shape[1], audio_out.shape[2]*2)).cuda()
+        lm_in[:,0:1,:] = torch.cat((audio_out[:,0:1,:], audio_out[:,0:1,:]), dim=2)
+        for i in range(1, audio_out.size(1)):
+            lm_in[:,i:i+1,:] = torch.cat((audio_out[:,i-1:i,:], audio_out[:,i:i+1,:]), dim=2)
             
-        lstm_input_torch = torch.stack(lstm_input, dim = 1)         #1,F,256
-        lstm_out, _ = self.lstm(lstm_input_torch, hidden)           #1,F,256
+        lm_out,_ = self.lm_lstm(lm_in)
         
-        lstm_out = lstm_out.reshape(-1,lstm_out.shape[-1])             #1*F,256
-        lm_pred = self.fc(lstm_out)                                 #1*F,68*2
-        lm_pred = lm_pred.view(audio.shape[0], audio.shape[1],-1)   #1,F,68*2
-
+        fc_in = lm_out.reshape(-1, self.lm_hidden_size)
+        fc_out = self.fc1(fc_in)
+        fc_out = self.fc2(fc_out)
+        lm_pred = fc_out.reshape(audio.shape[0], audio.shape[1], -1)
         return lm_pred
         
         
@@ -145,6 +142,7 @@ class A2LM_LSTM(nn.Module):
             if epoch % 50 == 0:
                 ct = datetime.datetime.now()
                 save_model(self, epoch, self.optimizer, f'{args.save_path}/e{epoch}-{ct}.pt')
+                self.inference()
             
             #Save best model
             if best_running_loss == -1 or val_running_loss < best_running_loss:
@@ -164,18 +162,27 @@ class A2LM_LSTM(nn.Module):
         for step, (audio, lm_gt) in enumerate(self.train_dataloader):            
             if torch.cuda.is_available():
                 audio, lm_gt = audio.cuda(), lm_gt.cuda()      #audio = 1,25,28,12; lm = 1,25,68*2
-                
+                audio = audio.reshape(audio.shape[0], audio.shape[1], -1)   #1,25,28*12
+
             lm_pred = self(audio)   #1,25,68*2
             
             self.optimizer.zero_grad()
-            loss = self.criterion(lm_pred, lm_gt)
+            mseloss = self.mseloss(lm_pred, lm_gt)
+            # ctcloss = self.ctcloss(lm_pred, lm_gt)
+            lm_pred_newshape = lm_pred.reshape(lm_gt.shape[0],lm_gt.shape[1],68,2)
+            lm_gt_newshape = lm_gt.reshape(lm_gt.shape[0],lm_gt.shape[1],68,2)
+            lmdloss = calculate_LMD_torch(lm_pred_newshape, 
+                                    lm_gt_newshape, 
+                                    norm_distance=1)
+            loss = mseloss * 0.1 + lmdloss
             loss.backward()
             self.optimizer.step()
         
             running_loss += loss.item()
-            msg = f"\r| Step: {step}/{len(self.train_dataloader)} of epoch {epoch} | Train Loss: {loss:#.4} |"
+            msg = f"\r| Step: {step}/{len(self.train_dataloader)} of epoch {epoch} | MSE Loss {mseloss:#.4}; LMD Loss: {lmdloss:#.4}; Train Loss: {loss:#.4} |"
             sys.stdout.write(msg)
             sys.stdout.flush()
+            
         return running_loss / len(self.train_dataloader)
 
     def validate_epoch(self, epoch):
@@ -185,12 +192,19 @@ class A2LM_LSTM(nn.Module):
             for step, (audio, lm_gt) in enumerate(self.val_dataloader):
                 if torch.cuda.is_available():
                     audio, lm_gt = audio.cuda(), lm_gt.cuda()      #audio = 1,25,28,12; lm = 1,25,68*2
+                    audio = audio.reshape(audio.shape[0], audio.shape[1], -1)   #1,25,28*12
                     
                 lm_pred = self(audio)       #1,25,68*2
-                loss = self.criterion(lm_pred, lm_gt)      
+                mseloss = self.mseloss(lm_pred, lm_gt)
+                lm_pred_newshape = lm_pred.reshape(lm_gt.shape[0],lm_gt.shape[1],68,2)
+                lm_gt_newshape = lm_gt.reshape(lm_gt.shape[0],lm_gt.shape[1],68,2)
+                lmdloss = calculate_LMD_torch(lm_pred_newshape, 
+                                        lm_gt_newshape, 
+                                        norm_distance=1)
+                loss = mseloss * 0.1 + lmdloss     
                 
                 running_loss += loss.item()
-                msg = f"\r| Step: {step}/{len(self.val_dataloader)} of epoch {epoch} | Val Loss: {loss:#.4} |"
+                msg = f"\r| Step: {step}/{len(self.val_dataloader)} of epoch {epoch} | MSE Loss {mseloss:#.4}; LMD Loss: {lmdloss:#.4}; Val Loss: {loss:#.4} |"
                 sys.stdout.write(msg)
                 sys.stdout.flush()
         return running_loss / len(self.val_dataloader)
@@ -201,20 +215,29 @@ class A2LM_LSTM(nn.Module):
         with torch.no_grad():
             rand_index = random.choice(range(len(self.val_dataloader)))
             audio,lm_gt = self.val_dataset[rand_index]      
-            audio = audio.unsqueeze(0)    #x = 1,25,28,12; y = 25,68*2
+            audio = audio.unsqueeze(0)    #x = 1,25,28,12; y = 1,25,68*2
+            audio = audio.reshape(audio.shape[0], audio.shape[1], -1)   #1,25,28*12
+            lm_gt = lm_gt.unsqueeze(0)
             if torch.cuda.is_available():
                 audio,lm_gt = audio.cuda(), lm_gt.cuda()   
             
             lm_pred = self(audio)           #1,25,68*2
-            lm_pred = lm_pred.squeeze(0)    #25,68*2
-            loss = self.criterion(lm_pred, lm_gt)      
-            print(f'Loss: {loss}')
+            print(lm_pred.shape)
+            print(lm_gt.shape)
+            mseloss = self.mseloss(lm_pred, lm_gt)
+            lm_pred_newshape = lm_pred.reshape(lm_gt.shape[0],lm_gt.shape[1],68,2)
+            lm_gt_newshape = lm_gt.reshape(lm_gt.shape[0],lm_gt.shape[1],68,2)
+            lmdloss = calculate_LMD_torch(lm_pred_newshape, 
+                                    lm_gt_newshape, 
+                                    norm_distance=1)    
+            loss = mseloss * 0.1 + lmdloss  
+            print(f'MSE Loss: {mseloss:#.4}; LMD Loss: {lmdloss:#.4}; Infer Loss: {loss:#.4}')
             
-            lm_pred = lm_pred.reshape(-1,68,2)
+            lm_pred = lm_pred.reshape(lm_pred.size(1),68,2)
             lm_pred = lm_pred.cpu().detach().numpy()
             outputs_pred = connect_face_keypoints(256,256,lm_pred)
             
-            lm_gt = lm_gt.reshape(lm_gt.shape[0],68,2)
+            lm_gt = lm_gt.reshape(lm_gt.size(1),68,2)
             lm_gt = lm_gt.cpu().detach().numpy()
             outputs_gt = connect_face_keypoints(256,256,lm_gt)
             
@@ -222,7 +245,6 @@ class A2LM_LSTM(nn.Module):
             np.save(f'{args.save_path}/lm_pred.npy', lm_pred)
             np.save(f'{args.save_path}/lm_gt.npy', lm_gt)
             
-            # Export to video
             outputs = []
             for i in range(len(outputs_gt)):
                 result_img = np.zeros((256, 256*2, 1))
@@ -230,14 +252,14 @@ class A2LM_LSTM(nn.Module):
                 result_img[:,256:,:] = outputs_pred[i] * 255
                 outputs.append(result_img)
             
-            create_video(outputs,f'{args.save_path}/prediction.mp4', fps=10)
+            create_video(outputs,f'{args.save_path}/prediction.mp4',fps=10)
     
     def load_model(self, filename='best_model.pt'):
         return load_model(self, self.optimizer, save_file=f'{args.save_path}/{filename}')
             
             
 if __name__ == '__main__': 
-    net = A2LM_LSTM()
+    net = A2LM_LMAudioPrev()
     if args.train:
         net.train_all()
     else:

@@ -3,6 +3,7 @@ import json
 from glob import glob
 from tqdm import tqdm
 import os
+import torch
 
 def calculate_LMD(pred_landmark, gt_landmark, norm_distance=1.0):
     r"""Compute Landmark Distance by Normalize Mean Square Error
@@ -22,6 +23,25 @@ def calculate_LMD(pred_landmark, gt_landmark, norm_distance=1.0):
     if (pred_landmark.ndim - 4) >= 0:
         lmd = np.mean(lmd, axis=(pred_landmark.ndim - 4))
     return lmd
+
+def calculate_LMD_torch(pred_landmark, gt_landmark, norm_distance=1.0):
+    r"""Compute Landmark Distance by Normalize Mean Square Error
+
+    Args:
+        pred_landmark   :   numpy.ndarray([BS, N_frame, N_point, feature_dim], dtype=np.float32)
+        gt_landmark     :   numpy.ndarray([BS, N_frame, N_point, feature_dim], dtype=np.float32)
+        norm_distance   :   float
+    Returns:
+        LMD            :   float (↓)
+    """
+    euclidean_distance = torch.sqrt(torch.sum((pred_landmark - gt_landmark)**2, dim=(pred_landmark.ndim - 1)))
+    norm_per_frame = torch.mean(euclidean_distance, dim=(pred_landmark.ndim - 2))
+    lmd = torch.divide(norm_per_frame, norm_distance)
+    if (pred_landmark.ndim - 3) >= 0:
+        lmd = torch.mean(lmd, dim=(pred_landmark.ndim - 3))
+    if (pred_landmark.ndim - 4) >= 0:
+        lmd = torch.mean(lmd, dim=(pred_landmark.ndim - 4))
+    return lmd.item()
 
 def calculate_LMV(pred_landmark, gt_landmark, norm_distance=1.0):
     r"""Compute Landmark Velocity by Normalize Mean Square Error
