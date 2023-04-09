@@ -5,8 +5,10 @@ import sys
 import random
 import datetime
 import torch
+import os
 from torch import nn, optim
 from torch.utils.data import Dataset, DataLoader
+import torch.nn.functional as F
 from modules.util_module import *
 from modules.net_module import conv2d
 from modules.face_visual_module import connect_face_keypoints
@@ -20,7 +22,7 @@ parser.add_argument('--batch_size', type=int, default=32)
 parser.add_argument('--learning_rate', type=float, default=1.0e-4)
 parser.add_argument('--n_epoches', type=int, default=500)
 
-parser.add_argument('--save_path', type=str, default='result_A2LM_LMAudioPrev_v2')
+parser.add_argument('--save_path', type=str, default=f'result_{os.path.splitext(os.path.basename(__file__))[0]}')
 parser.add_argument('--use_pretrain', type=bool, default=False)
 parser.add_argument('--train', action='store_true')
 parser.add_argument('--val', action='store_true')
@@ -47,9 +49,9 @@ class FaceDataset(Dataset):
 
     def __len__(self):
         return len(self.data_path)
-        # return 64
+        # return 32
         
-class A2LM_LMAudioPrev(nn.Module):
+class A2LM(nn.Module):
     def __init__(self):
         super().__init__()
         self.input_size = 28*12
@@ -66,15 +68,18 @@ class A2LM_LMAudioPrev(nn.Module):
                             bidirectional=False,
                             batch_first=True)
         
-        self.lm_lstm = nn.LSTM(input_size=self.audio_hidden_size * 2,
+        self.lm_lstm = nn.LSTM(input_size=self.audio_hidden_size,
                             hidden_size=self.lm_hidden_size,
                             num_layers=self.lm_num_layers,
                             dropout=0,
                             bidirectional=False,
                             batch_first=True)
         
-        self.fc1 = nn.Linear(self.lm_hidden_size, 256)
-        self.fc2 = nn.Linear(256, self.output_size)
+        self.attention_layer = nn.Linear(in_features=self.lm_hidden_size, out_features=self.lm_hidden_size, bias=True)
+        
+        self.fc1 = nn.Linear(self.lm_hidden_size*2, 512)
+        self.fc2 = nn.Linear(512, 256)
+        self.fc3 = nn.Linear(256, self.output_size)
         
         self.train_dataset = FaceDataset(args.train_dataset_path)
         self.val_dataset = FaceDataset(args.val_dataset_path)
@@ -83,7 +88,6 @@ class A2LM_LMAudioPrev(nn.Module):
         self.val_dataloader = DataLoader(self.val_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=True)
         
         self.mseloss = nn.MSELoss()
-        # self.ctcloss = nn.CTCLoss(blank=0)
         self.optimizer = optim.Adam(self.parameters(), lr = args.learning_rate)
         
         self.init_model()
@@ -102,19 +106,23 @@ class A2LM_LMAudioPrev(nn.Module):
     
     def forward(self, audio):
         #audio: batch_size, seq_len, dim
-        audio_out,_ = self.audio_lstm(audio)
-        lm_in = torch.zeros((audio_out.shape[0], audio_out.shape[1], audio_out.shape[2]*2)).cuda()
-        lm_in[:,0:1,:] = torch.cat((audio_out[:,0:1,:], audio_out[:,0:1,:]), dim=2)
-        for i in range(1, audio_out.size(1)):
-            lm_in[:,i:i+1,:] = torch.cat((audio_out[:,i-1:i,:], audio_out[:,i:i+1,:]), dim=2)
-            
-        lm_out,_ = self.lm_lstm(lm_in)
+        audio_out, audio_hidden = self.audio_lstm(audio)
+        decoder_hidden = audio_hidden
+        lm_out = []
+        for i in range(audio.size(1)):
+            attention_scores = torch.tanh(self.attention_layer(audio_out))
+            attention_scores = torch.matmul(attention_scores, decoder_hidden[0][-1].unsqueeze(2)).squeeze(2)
+            attention_weights = torch.softmax(attention_scores, dim=1)
+            context = torch.matmul(attention_weights.unsqueeze(1), audio_out).squeeze(1)
+            decoder_output, decoder_hidden = self.lm_lstm(context.unsqueeze(1), decoder_hidden)
+            lm_out.append(decoder_output)
         
-        fc_in = lm_out.reshape(-1, self.lm_hidden_size)
-        fc_out = self.fc1(fc_in)
+        fc_out = torch.cat(lm_out, dim=1)
+        # fc_out = self.fc1(output)
         fc_out = self.fc2(fc_out)
-        lm_pred = fc_out.reshape(audio.shape[0], audio.shape[1], -1)
-        return lm_pred
+        fc_out = self.fc3(fc_out)
+        # lm_pred = fc_out.reshape(audio.shape[0], audio.shape[1], -1)
+        return fc_out
         
         
     def train_all(self):
@@ -194,7 +202,7 @@ class A2LM_LMAudioPrev(nn.Module):
                 if torch.cuda.is_available():
                     audio, lm_gt = audio.cuda(), lm_gt.cuda()      #audio = 1,25,28,12; lm = 1,25,68*2
                     audio = audio.reshape(audio.shape[0], audio.shape[1], -1)   #1,25,28*12
-                
+                    
                 lm_pred = self(audio)       #1,25,68*2
                 mseloss = self.mseloss(lm_pred, lm_gt)
                 lm_pred_newshape = lm_pred.reshape(lm_gt.shape[0],lm_gt.shape[1],68,2)
@@ -268,7 +276,6 @@ class A2LM_LMAudioPrev(nn.Module):
                 lm_pred = self(audio)       #1,25,68*2
                 lm_pred_newshape = lm_pred.reshape(lm_gt.shape[0],lm_gt.shape[1],68,2)
                 lm_gt_newshape = lm_gt.reshape(lm_gt.shape[0],lm_gt.shape[1],68,2)
-                
                 lmd = calculate_LMD_torch(lm_pred_newshape, 
                                         lm_gt_newshape, 
                                         norm_distance=1)
@@ -287,14 +294,14 @@ class A2LM_LMAudioPrev(nn.Module):
             
             
 if __name__ == '__main__': 
-    net = A2LM_LMAudioPrev()
+    net = A2LM()
     if args.train:
         net.train_all()
     elif args.val:
         net.load_model()
         lmd,rmse,mae = net.calculate_val_lmd()
         print(f'LMD: {lmd}; RMSE: {rmse}; MAE: {mae}')
-        #LMD: 2.01594624577499; RMSE: 3.188704252243042; MAE: 1.2722841501235962
+        # LMD: 2.8368494278047143; RMSE: 3.410590410232544; MAE: 1.7777780294418335
     else:
         net.load_model()
         net.inference()

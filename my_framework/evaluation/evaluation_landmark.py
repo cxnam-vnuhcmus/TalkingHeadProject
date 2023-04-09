@@ -43,6 +43,23 @@ def calculate_LMD_torch(pred_landmark, gt_landmark, norm_distance=1.0):
         lmd = torch.mean(lmd, dim=(pred_landmark.ndim - 4))
     return lmd.item()
 
+def calculate_rmse_torch(pred_landmark, gt_landmark):
+    """Calculate Root Mean Square Error (RMSE) loss between predicted and gt landmarks"""
+    # Calculate the squared errors
+    squared_errors = torch.sum((pred_landmark - gt_landmark) ** 2, dim=3)
+
+    # Calculate the mean of squared errors
+    mse = torch.mean(squared_errors)
+
+    # Calculate the RMSE
+    rmse = torch.sqrt(mse)
+    return rmse
+
+def calculate_mae_torch(pred_landmark, gt_landmark):
+    """Calculate Mean Average Error (MAE) loss between predicted and gt landmarks"""
+    mae = torch.mean(torch.abs(pred_landmark - gt_landmark))
+    return mae
+
 def calculate_LMV(pred_landmark, gt_landmark, norm_distance=1.0):
     r"""Compute Landmark Velocity by Normalize Mean Square Error
 

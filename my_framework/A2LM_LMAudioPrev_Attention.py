@@ -24,6 +24,7 @@ parser.add_argument('--n_epoches', type=int, default=500)
 parser.add_argument('--save_path', type=str, default='result_A2LM_LMAudioPrev_Attention')
 parser.add_argument('--use_pretrain', type=bool, default=False)
 parser.add_argument('--train', action='store_true')
+parser.add_argument('--val', action='store_true')
 args = parser.parse_args()
 
 class FaceDataset(Dataset):
@@ -43,13 +44,13 @@ class FaceDataset(Dataset):
         data = read_data_from_path(mfcc_path=parts[0], lm_path=parts[1], start=parts[3], end=parts[4])
         # else:
         #     data = read_data_from_path(mfcc_path=parts[0], lm_path=parts[1])
-        return  torch.from_numpy(data['mfcc_data_list']), torch.from_numpy(data['lm_data_list'])
+        return  torch.from_numpy(data['mfcc_data_list']), torch.from_numpy(data['lm_data_list']), data['bb_list']
 
     def __len__(self):
         return len(self.data_path)
         # return 32
         
-class A2LM_LMAudioPrev(nn.Module):
+class A2LM(nn.Module):
     def __init__(self):
         super().__init__()
         self.input_size = 28*12
@@ -168,7 +169,7 @@ class A2LM_LMAudioPrev(nn.Module):
     def train_epoch(self, epoch):
         self.train()
         running_loss = 0
-        for step, (audio, lm_gt) in enumerate(self.train_dataloader):            
+        for step, (audio, lm_gt, _) in enumerate(self.train_dataloader):            
             if torch.cuda.is_available():
                 audio, lm_gt = audio.cuda(), lm_gt.cuda()      #audio = 1,25,28,12; lm = 1,25,68*2
                 audio = audio.reshape(audio.shape[0], audio.shape[1], -1)   #1,25,28*12
@@ -198,7 +199,7 @@ class A2LM_LMAudioPrev(nn.Module):
         self.eval()
         running_loss = 0
         with torch.no_grad():
-            for step, (audio, lm_gt) in enumerate(self.val_dataloader):
+            for step, (audio, lm_gt, _) in enumerate(self.val_dataloader):
                 if torch.cuda.is_available():
                     audio, lm_gt = audio.cuda(), lm_gt.cuda()      #audio = 1,25,28,12; lm = 1,25,68*2
                     audio = audio.reshape(audio.shape[0], audio.shape[1], -1)   #1,25,28*12
@@ -223,7 +224,7 @@ class A2LM_LMAudioPrev(nn.Module):
             self.cuda()
         with torch.no_grad():
             rand_index = random.choice(range(len(self.val_dataloader)))
-            audio,lm_gt = self.val_dataset[rand_index]      
+            audio,lm_gt,lm_bb = self.val_dataset[rand_index]      
             audio = audio.unsqueeze(0)    #x = 1,25,28,12; y = 1,25,68*2
             audio = audio.reshape(audio.shape[0], audio.shape[1], -1)   #1,25,28*12
             lm_gt = lm_gt.unsqueeze(0)
@@ -253,6 +254,7 @@ class A2LM_LMAudioPrev(nn.Module):
             # Save lm_pred, lm_gt
             np.save(f'{args.save_path}/lm_pred.npy', lm_pred)
             np.save(f'{args.save_path}/lm_gt.npy', lm_gt)
+            np.save(f'{args.save_path}/lm_bb.npy', lm_bb)
             
             outputs = []
             for i in range(len(outputs_gt)):
@@ -263,14 +265,46 @@ class A2LM_LMAudioPrev(nn.Module):
             
             create_video(outputs,f'{args.save_path}/prediction.mp4',fps=10)
     
+    def calculate_val_lmd(self):
+        if torch.cuda.is_available():
+            self.cuda()
+        lmd_loss = 0
+        rmse_loss = 0
+        mae_loss = 0
+        with torch.no_grad():
+            for step, (audio, lm_gt, _) in tqdm(enumerate(self.val_dataloader)):
+                if torch.cuda.is_available():
+                    audio,lm_gt = audio.cuda(), lm_gt.cuda() 
+                audio = audio.reshape(audio.shape[0], audio.shape[1], -1)   #1,25,28*12
+                lm_pred = self(audio)       #1,25,68*2
+                lm_pred_newshape = lm_pred.reshape(lm_gt.shape[0],lm_gt.shape[1],68,2)
+                lm_gt_newshape = lm_gt.reshape(lm_gt.shape[0],lm_gt.shape[1],68,2)
+                lmd = calculate_LMD_torch(lm_pred_newshape, 
+                                        lm_gt_newshape, 
+                                        norm_distance=1)
+                lmd_loss += lmd
+                
+                rmse = calculate_rmse_torch(lm_pred_newshape, lm_gt_newshape)
+                rmse_loss += rmse
+                
+                mae = calculate_mae_torch(lm_pred_newshape, lm_gt_newshape)
+                mae_loss += mae
+                
+        return lmd_loss / len(self.val_dataloader), rmse_loss / len(self.val_dataloader), mae_loss / len(self.val_dataloader)
+    
     def load_model(self, filename='best_model.pt'):
         return load_model(self, self.optimizer, save_file=f'{args.save_path}/{filename}')
             
             
 if __name__ == '__main__': 
-    net = A2LM_LMAudioPrev()
+    net = A2LM()
     if args.train:
         net.train_all()
+    elif args.val:
+        net.load_model()
+        lmd,rmse,mae = net.calculate_val_lmd()
+        print(f'LMD: {lmd}; RMSE: {rmse}; MAE: {mae}')
+        #LMD: 1.8907165222051667; RMSE: 2.8752355575561523; MAE: 1.1927943229675293
     else:
         net.load_model()
         net.inference()

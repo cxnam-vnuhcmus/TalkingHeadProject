@@ -595,6 +595,7 @@ def add_audio(video_path, audio_path, output_path):
 def read_data_from_path(mfcc_path=None, lm_path=None, face_path=None, start=None, end=None):
     mfcc_data_list = None
     lm_data_list = None
+    bb_list = None
     face_data_list = None
     
     if mfcc_path is not None:
@@ -630,10 +631,12 @@ def read_data_from_path(mfcc_path=None, lm_path=None, face_path=None, start=None
                 data = json.load(f)
                 # lm_data = data['lm68']
                 lm_data = data['lm68'] * np.asarray(256/(data['bb'][2] - data['bb'][0]))
-                bb_list.append(data['bb'])
+                # bb_list.append(data['bb'])
             lm_data_list.append([lm_data])
+            bb_list.append([data['bb']])
         lm_data_list = np.vstack(lm_data_list).astype(np.float32)
         lm_data_list = lm_data_list.reshape(*lm_data_list.shape[0:-2], -1)
+        bb_list = np.vstack(bb_list)
         
     if face_path is not None:
         face_data_list = []
@@ -654,7 +657,8 @@ def read_data_from_path(mfcc_path=None, lm_path=None, face_path=None, start=None
     return {
         'mfcc_data_list': mfcc_data_list, 
         'lm_data_list': lm_data_list, 
-        'face_data_list': face_data_list
+        'face_data_list': face_data_list,
+        'bb_list': bb_list
     }
     
 def save_model(model, epoch, optimizer=None, save_file='.'):
