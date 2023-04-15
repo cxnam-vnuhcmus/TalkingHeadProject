@@ -1,2 +1,7 @@
 my_framework/result_*/*.pt
 my_framework/result_*/*.mp4
+imaginaire/**/*.pt
+imaginaire/**/*.tar.gz
+imaginaire/**/*.jpg
+imaginaire/**/*.json
+imaginaire/**/*.mp4
