@@ -232,8 +232,8 @@ test_data:
     test:
         is_lmdb: False
         roots:            
-            - datasets/reference
-            - datasets/test
+            - faceForensics/reference
+            - faceForensics/driving
         batch_size: 1        
         augmentations:            
             resize_smallest_side: 1024
