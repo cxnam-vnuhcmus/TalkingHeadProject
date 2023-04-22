@@ -14,14 +14,14 @@ from modules.face_visual_module import connect_face_keypoints
 from evaluation.evaluation_landmark import *
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--train_dataset_path', type=str, default='data/train_MEAD.json')
-parser.add_argument('--val_dataset_path', type=str, default='data/val_MEAD.json')
+parser.add_argument('--train_dataset_path', type=str, default='data/train_CREMAD.json')
+parser.add_argument('--val_dataset_path', type=str, default='data/val_CREMAD.json')
 
 parser.add_argument('--batch_size', type=int, default=32)
 parser.add_argument('--learning_rate', type=float, default=1.0e-4)
 parser.add_argument('--n_epoches', type=int, default=500)
 
-parser.add_argument('--save_path', type=str, default='result_A2LM_LMAudioPrev_Attention')
+parser.add_argument('--save_path', type=str, default='result_A2LM_LMAudioPrev_Attention_CREMAD')
 parser.add_argument('--use_pretrain', type=bool, default=False)
 parser.add_argument('--train', action='store_true')
 parser.add_argument('--val', action='store_true')
@@ -36,12 +36,21 @@ class FaceDataset(Dataset):
         
         torch.autograd.set_detect_anomaly(True)
         
-    def __getitem__(self, index):
-        rand_index = random.choice(range(len(self.data_path)))
-        parts = self.data_path[rand_index].split('|')        
-
+    def __getitem__(self, index=None, start=None, end=None):
+        if index is None:
+            # while True:
+            index = random.choice(range(len(self.data_path)))
+            parts = self.data_path[index].split('|')        
+                # if 'sad' in parts[0]:
+                #     break
+        
+        parts = self.data_path[index].split('|')   
+             
+        if start is None and end is None:
+            start = parts[3]
+            end = parts[4]    
         # if args.train:
-        data = read_data_from_path(mfcc_path=parts[0], lm_path=parts[1], start=parts[3], end=parts[4])
+        data = read_data_from_path(mfcc_path=parts[0], lm_path=parts[1], start=start, end=end)
         # else:
         #     data = read_data_from_path(mfcc_path=parts[0], lm_path=parts[1])
         return  torch.from_numpy(data['mfcc_data_list']), torch.from_numpy(data['lm_data_list']), data['bb_list']
@@ -223,8 +232,8 @@ class A2LM(nn.Module):
         if torch.cuda.is_available():
             self.cuda()
         with torch.no_grad():
-            rand_index = random.choice(range(len(self.val_dataloader)))
-            audio,lm_gt,lm_bb = self.val_dataset[rand_index]      
+            # rand_index = random.choice(range(len(self.val_dataloader)))
+            audio,lm_gt,lm_bb = self.val_dataset.__getitem__(None, 0, -1)
             audio = audio.unsqueeze(0)    #x = 1,25,28,12; y = 1,25,68*2
             audio = audio.reshape(audio.shape[0], audio.shape[1], -1)   #1,25,28*12
             lm_gt = lm_gt.unsqueeze(0)

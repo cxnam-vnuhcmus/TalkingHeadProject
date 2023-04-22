@@ -606,8 +606,12 @@ def read_data_from_path(mfcc_path=None, lm_path=None, face_path=None, start=None
             end = 1
         else:
             start, end = int(start), int(end)
+        if end == -1:
+            end = len(mfcc_list) - 1
+        
         for index in range(start,end):
-            mfcc_file = mfcc_list[index]
+            mfcc_file = os.path.join(mfcc_path, f'{index+1:05d}.npy')
+            # mfcc_file = mfcc_list[index]
             mfcc_data = np.load(mfcc_file)
             mfcc_data = np.expand_dims(mfcc_data, axis=0)
             mfcc_data_list.append(mfcc_data)
@@ -622,6 +626,10 @@ def read_data_from_path(mfcc_path=None, lm_path=None, face_path=None, start=None
             end = 1
         else:
             start, end = int(start), int(end)
+        
+        if end == -1:
+            end = len(lm_list) - 1
+            
         for index in range(start,end):
             try:
                 lm_file = os.path.join(lm_path, f'{index+1:05d}.json')
@@ -645,6 +653,7 @@ def read_data_from_path(mfcc_path=None, lm_path=None, face_path=None, start=None
             end = 1
         else:
             start, end = int(start), int(end)
+        
         for index in range(start,end):
             try:
                 face_file = os.path.join(face_path, f'{index+1:05d}.jpg')
