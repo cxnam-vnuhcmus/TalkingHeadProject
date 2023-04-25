@@ -86,6 +86,23 @@ def calculate_LMV(pred_landmark, gt_landmark, norm_distance=1.0):
         lmv = np.mean(lmv, axis=(pred_landmark.ndim - 4))
     return lmv
 
+def calculate_LMV_torch(pred_landmark, gt_landmark, norm_distance=1.0):
+    if gt_landmark.ndim == 4:
+        velocity_pred_landmark = pred_landmark[:, 1:, :, :] - pred_landmark[:, 0:-1, :, :]
+        velocity_gt_landmark = gt_landmark[:, 1:, :, :] - gt_landmark[:, 0:-1, :, :]
+    elif gt_landmark.ndim == 3:
+        velocity_pred_landmark = pred_landmark[1:, :, :] - pred_landmark[0:-1, :, :]
+        velocity_gt_landmark = gt_landmark[1:, :, :] - gt_landmark[0:-1, :, :]
+            
+    euclidean_distance = torch.sqrt(torch.sum((velocity_pred_landmark - velocity_gt_landmark)**2, dim=(pred_landmark.ndim - 1)))
+    norm_per_frame = torch.mean(euclidean_distance, dim=(pred_landmark.ndim - 2))
+    lmv = torch.div(norm_per_frame, norm_distance)
+    if (pred_landmark.ndim - 3) >= 0:
+        lmv = torch.mean(lmv, dim=(pred_landmark.ndim - 3))
+    if (pred_landmark.ndim - 4) >= 0:
+        lmv = torch.mean(lmv, dim=(pred_landmark.ndim - 4))
+    return lmv
+
 def calculate_folder_landmark(folderA, folderB, eval_lmd=True, eval_lmv=True):
     total_lmd = 0
     total_lmv = 0

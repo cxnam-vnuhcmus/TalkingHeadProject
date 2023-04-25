@@ -14,15 +14,15 @@ from modules.face_visual_module import connect_face_keypoints
 from evaluation.evaluation_landmark import *
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--train_dataset_path', type=str, default='data/train_CREMAD.json')
-parser.add_argument('--val_dataset_path', type=str, default='data/val_CREMAD.json')
+parser.add_argument('--train_dataset_path', type=str, default='data/train_MEAD.json')
+parser.add_argument('--val_dataset_path', type=str, default='data/val_MEAD.json')
 
-parser.add_argument('--batch_size', type=int, default=32)
+parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--learning_rate', type=float, default=1.0e-4)
 parser.add_argument('--n_epoches', type=int, default=500)
 
-parser.add_argument('--save_path', type=str, default='result_A2LM_LMAudioPrev_Attention_CREMAD')
-parser.add_argument('--use_pretrain', type=bool, default=False)
+parser.add_argument('--save_path', type=str, default='result_A2LM_LMAudioPrev_Attention')
+parser.add_argument('--use_pretrain', action='store_true')
 parser.add_argument('--train', action='store_true')
 parser.add_argument('--val', action='store_true')
 args = parser.parse_args()
@@ -41,7 +41,7 @@ class FaceDataset(Dataset):
             # while True:
             index = random.choice(range(len(self.data_path)))
             parts = self.data_path[index].split('|')        
-                # if 'sad' in parts[0]:
+                # if 'happy' in parts[0]:
                 #     break
         
         parts = self.data_path[index].split('|')   
@@ -53,7 +53,7 @@ class FaceDataset(Dataset):
         data = read_data_from_path(mfcc_path=parts[0], lm_path=parts[1], start=start, end=end)
         # else:
         #     data = read_data_from_path(mfcc_path=parts[0], lm_path=parts[1])
-        return  torch.from_numpy(data['mfcc_data_list']), torch.from_numpy(data['lm_data_list']), data['bb_list']
+        return  torch.from_numpy(data['mfcc_data_list']), torch.from_numpy(data['lm_data_list']), data['bb_list'],parts[0]
 
     def __len__(self):
         return len(self.data_path)
@@ -178,7 +178,7 @@ class A2LM(nn.Module):
     def train_epoch(self, epoch):
         self.train()
         running_loss = 0
-        for step, (audio, lm_gt, _) in enumerate(self.train_dataloader):            
+        for step, (audio, lm_gt, _,_) in enumerate(self.train_dataloader):            
             if torch.cuda.is_available():
                 audio, lm_gt = audio.cuda(), lm_gt.cuda()      #audio = 1,25,28,12; lm = 1,25,68*2
                 audio = audio.reshape(audio.shape[0], audio.shape[1], -1)   #1,25,28*12
@@ -208,7 +208,7 @@ class A2LM(nn.Module):
         self.eval()
         running_loss = 0
         with torch.no_grad():
-            for step, (audio, lm_gt, _) in enumerate(self.val_dataloader):
+            for step, (audio, lm_gt, _,_) in enumerate(self.val_dataloader):
                 if torch.cuda.is_available():
                     audio, lm_gt = audio.cuda(), lm_gt.cuda()      #audio = 1,25,28,12; lm = 1,25,68*2
                     audio = audio.reshape(audio.shape[0], audio.shape[1], -1)   #1,25,28*12
@@ -233,7 +233,7 @@ class A2LM(nn.Module):
             self.cuda()
         with torch.no_grad():
             # rand_index = random.choice(range(len(self.val_dataloader)))
-            audio,lm_gt,lm_bb = self.val_dataset.__getitem__(None, 0, -1)
+            audio,lm_gt,lm_bb,_ = self.val_dataset.__getitem__(None, 0, -1)
             audio = audio.unsqueeze(0)    #x = 1,25,28,12; y = 1,25,68*2
             audio = audio.reshape(audio.shape[0], audio.shape[1], -1)   #1,25,28*12
             lm_gt = lm_gt.unsqueeze(0)
@@ -273,15 +273,69 @@ class A2LM(nn.Module):
                 outputs.append(result_img)
             
             create_video(outputs,f'{args.save_path}/prediction.mp4',fps=10)
+            
+    def inference_each_emo(self):
+        if torch.cuda.is_available():
+            self.cuda()
+        with torch.no_grad():
+            mfcc_paths = ['/root/Datasets/Features/M003/mfccs/angry/level_1/00020', 
+                          '/root/Datasets/Features/M003/mfccs/disgusted/level_2/00016',
+                          '/root/Datasets/Features/M003/mfccs/contempt/level_1/00027',
+                          '/root/Datasets/Features/M003/mfccs/fear/level_2/00020',
+                          '/root/Datasets/Features/M003/mfccs/happy/level_1/00005',
+                          '/root/Datasets/Features/M003/mfccs/sad/level_1/00006',
+                          '/root/Datasets/Features/M003/mfccs/surprised/level_1/00020',
+                          '/root/Datasets/Features/M003/mfccs/neutral/level_1/00010']
+            for id, mfcc_path in enumerate(mfcc_paths):
+                lm_path = mfcc_path.replace('mfccs','landmarks74')
+                data = read_data_from_path(mfcc_path=mfcc_path, lm_path=lm_path, start=0, end=-1)
+                audio = torch.from_numpy(data['mfcc_data_list'])
+                lm_gt = torch.from_numpy(data['lm_data_list'])
+                lm_bb = data['bb_list']
+        
+                audio = audio.unsqueeze(0)    #x = 1,25,28,12; y = 1,25,68*2
+                audio = audio.reshape(audio.shape[0], audio.shape[1], -1)   #1,25,28*12
+                lm_gt = lm_gt.unsqueeze(0)
+                if torch.cuda.is_available():
+                    audio,lm_gt = audio.cuda(), lm_gt.cuda()   
+                
+                lm_pred = self(audio)           #1,25,68*2
+
+                lm_pred = lm_pred.reshape(lm_pred.size(1),68,2)
+                lm_pred = lm_pred.cpu().detach().numpy()
+                outputs_pred = connect_face_keypoints(256,256,lm_pred)
+                
+                lm_gt = lm_gt.reshape(lm_gt.size(1),68,2)
+                lm_gt = lm_gt.cpu().detach().numpy()
+                outputs_gt = connect_face_keypoints(256,256,lm_gt)
+                
+                # Save lm_pred, lm_gt
+                np.save(f'{args.save_path}/lm_pred_{id}.npy', lm_pred)
+                np.save(f'{args.save_path}/lm_gt_{id}.npy', lm_gt)
+                np.save(f'{args.save_path}/lm_bb_{id}.npy', lm_bb)
+                
+                outputs = []
+                for i in range(len(outputs_gt)):
+                    result_img = np.zeros((256, 256*2, 1))
+                    result_img[:,:256,:] = outputs_gt[i] * 255
+                    result_img[:,256:,:] = outputs_pred[i] * 255
+                    outputs.append(result_img)
+                
+                create_video(outputs,f'{args.save_path}/prediction_{id}.mp4',fps=10)
     
     def calculate_val_lmd(self):
         if torch.cuda.is_available():
             self.cuda()
         lmd_loss = 0
+        lmv_loss = 0
         rmse_loss = 0
         mae_loss = 0
+        lmd_min = [100,100,100,100,100,100,100,100]
+        lmd_min_path = ['','','','','','','','']
+        emo_mapping = ['angry', 'disgusted', 'contempt', 'fear', 'happy', 'sad', 'surprised', 'neutral']
+
         with torch.no_grad():
-            for step, (audio, lm_gt, _) in tqdm(enumerate(self.val_dataloader)):
+            for step, (audio, lm_gt, _, data_path) in tqdm(enumerate(self.val_dataloader)):
                 if torch.cuda.is_available():
                     audio,lm_gt = audio.cuda(), lm_gt.cuda() 
                 audio = audio.reshape(audio.shape[0], audio.shape[1], -1)   #1,25,28*12
@@ -293,13 +347,27 @@ class A2LM(nn.Module):
                                         norm_distance=1)
                 lmd_loss += lmd
                 
+                lmv = calculate_LMV_torch(lm_pred_newshape, 
+                                        lm_gt_newshape, 
+                                        norm_distance=1)
+                lmv_loss += lmv
+                
                 rmse = calculate_rmse_torch(lm_pred_newshape, lm_gt_newshape)
                 rmse_loss += rmse
                 
                 mae = calculate_mae_torch(lm_pred_newshape, lm_gt_newshape)
                 mae_loss += mae
                 
-        return lmd_loss / len(self.val_dataloader), rmse_loss / len(self.val_dataloader), mae_loss / len(self.val_dataloader)
+                for id, emo in enumerate(emo_mapping):
+                    if emo in data_path[0]:                        
+                        if lmd < lmd_min[id]:
+                            lmd_min[id] = lmd
+                            lmd_min_path[id] = data_path[0]
+                            
+        for id in range(len(lmd_min)):
+            print(f'{id} : {lmd_min[id]} - {lmd_min_path[id]}')
+                
+        return lmd_loss / len(self.val_dataloader), lmv_loss / len(self.val_dataloader), rmse_loss / len(self.val_dataloader), mae_loss / len(self.val_dataloader)
     
     def load_model(self, filename='best_model.pt'):
         return load_model(self, self.optimizer, save_file=f'{args.save_path}/{filename}')
@@ -311,9 +379,13 @@ if __name__ == '__main__':
         net.train_all()
     elif args.val:
         net.load_model()
-        lmd,rmse,mae = net.calculate_val_lmd()
-        print(f'LMD: {lmd}; RMSE: {rmse}; MAE: {mae}')
-        #LMD: 1.8907165222051667; RMSE: 2.8752355575561523; MAE: 1.1927943229675293
+        lmd, lmv,rmse,mae = net.calculate_val_lmd()
+        print(f'LMD: {lmd};LMV: {lmv}; RMSE: {rmse}; MAE: {mae}')
+        #Epoch 100/MEAD: LMD: 3.5444338350761226;LMV: 2.01357364654541; RMSE: 4.393388271331787; MAE: 2.229139566421509
+        #Epoch 300/MEAD: LMD: 2.172164072350758;LMV: 1.4477765560150146; RMSE: 3.112738609313965; MAE: 1.3703311681747437
+        #Epoch 484/MEAD: LMD: 1.8943945998098792;LMV: 1.245319128036499; RMSE: 2.876394033432007; MAE: 1.1945229768753052
+        #Epoch 105/CRMD: LMD: 1.8502711271867156;LMV: 1.41961669921875; RMSE: 2.289553165435791; MAE: 1.1693556308746338
+        #Epoch 196/CRMD: LMD: 1.5343044173593323;LMV: 1.2477023601531982; RMSE: 1.9643146991729736; MAE: 0.9698354601860046
     else:
         net.load_model()
-        net.inference()
+        net.inference_each_emo()

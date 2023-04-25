@@ -8,3 +8,8 @@ imaginaire/**/*.json
 imaginaire/**/*.mp4
 imaginaire/**/*.pyc
 *.pyc
+imaginaire/**/*.txt
+imaginaire/**/*.pth
+my_framework/**/*.png
+my_framework/**/*.npy
+my_framework/**/*.npy
