@@ -406,6 +406,10 @@ class Trainer(BaseTrainer):
         os.makedirs(output_dir, exist_ok=True)
         # imageio.imwrite(output_filename, image_grid)
         imageio.imwrite(output_filename, tensor2im(self.net_G_output['fake_images'])[0])
+        output_real = os.path.join(output_dir + '_real', save_name)
+        os.makedirs(output_dir + '_real', exist_ok=True)
+        imageio.imwrite(output_real, tensor2im(data['images'][:,0])[0])
+        
         self.t += 1
 
         return image_grid

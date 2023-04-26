@@ -14,14 +14,14 @@ from modules.face_visual_module import connect_face_keypoints
 from evaluation.evaluation_landmark import *
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--train_dataset_path', type=str, default='data/train_MEAD.json')
-parser.add_argument('--val_dataset_path', type=str, default='data/val_MEAD.json')
+parser.add_argument('--train_dataset_path', type=str, default='data/train_CREMAD.json')
+parser.add_argument('--val_dataset_path', type=str, default='data/val_CREMAD.json')
 
 parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--learning_rate', type=float, default=1.0e-4)
 parser.add_argument('--n_epoches', type=int, default=500)
 
-parser.add_argument('--save_path', type=str, default='result_A2LM_LMAudioPrev_Attention')
+parser.add_argument('--save_path', type=str, default='result_A2LM_LMAudioPrev_Attention_CREMAD')
 parser.add_argument('--use_pretrain', action='store_true')
 parser.add_argument('--train', action='store_true')
 parser.add_argument('--val', action='store_true')
@@ -278,14 +278,12 @@ class A2LM(nn.Module):
         if torch.cuda.is_available():
             self.cuda()
         with torch.no_grad():
-            mfcc_paths = ['/root/Datasets/Features/M003/mfccs/angry/level_1/00020', 
-                          '/root/Datasets/Features/M003/mfccs/disgusted/level_2/00016',
-                          '/root/Datasets/Features/M003/mfccs/contempt/level_1/00027',
-                          '/root/Datasets/Features/M003/mfccs/fear/level_2/00020',
-                          '/root/Datasets/Features/M003/mfccs/happy/level_1/00005',
-                          '/root/Datasets/Features/M003/mfccs/sad/level_1/00006',
-                          '/root/Datasets/Features/M003/mfccs/surprised/level_1/00020',
-                          '/root/Datasets/Features/M003/mfccs/neutral/level_1/00010']
+            mfcc_paths = ['/root/Datasets/CREMA-D/Features/mfccs/1017_TIE_ANG_XX', 
+                          '/root/Datasets/CREMA-D/Features/mfccs/1025_ITS_DIS_XX',
+                          '/root/Datasets/CREMA-D/Features/mfccs/1011_ITS_FEA_XX',
+                          '/root/Datasets/CREMA-D/Features/mfccs/1006_TIE_HAP_XX',
+                          '/root/Datasets/CREMA-D/Features/mfccs/1019_WSI_SAD_XX',
+                          '/root/Datasets/CREMA-D/Features/mfccs/1006_TIE_NEU_XX']
             for id, mfcc_path in enumerate(mfcc_paths):
                 lm_path = mfcc_path.replace('mfccs','landmarks74')
                 data = read_data_from_path(mfcc_path=mfcc_path, lm_path=lm_path, start=0, end=-1)
@@ -332,7 +330,8 @@ class A2LM(nn.Module):
         mae_loss = 0
         lmd_min = [100,100,100,100,100,100,100,100]
         lmd_min_path = ['','','','','','','','']
-        emo_mapping = ['angry', 'disgusted', 'contempt', 'fear', 'happy', 'sad', 'surprised', 'neutral']
+        # emo_mapping = ['angry', 'disgusted', 'contempt', 'fear', 'happy', 'sad', 'surprised', 'neutral']
+        emo_mapping = ['ANG', 'DIS', 'contempt', 'FEA', 'HAP', 'SAD', 'surprised', 'NEU']
 
         with torch.no_grad():
             for step, (audio, lm_gt, _, data_path) in tqdm(enumerate(self.val_dataloader)):
@@ -386,6 +385,8 @@ if __name__ == '__main__':
         #Epoch 484/MEAD: LMD: 1.8943945998098792;LMV: 1.245319128036499; RMSE: 2.876394033432007; MAE: 1.1945229768753052
         #Epoch 105/CRMD: LMD: 1.8502711271867156;LMV: 1.41961669921875; RMSE: 2.289553165435791; MAE: 1.1693556308746338
         #Epoch 196/CRMD: LMD: 1.5343044173593323;LMV: 1.2477023601531982; RMSE: 1.9643146991729736; MAE: 0.9698354601860046
+        #Epoch 300/CRMD: LMD: 1.4413805628816287;LMV: 1.1612162590026855; RMSE: 1.8930352926254272; MAE: 0.9108084440231323
+        #Epoch 385/CRMD: LMD: 1.3678209967911243;LMV: 1.1221470832824707; RMSE: 1.8277004957199097; MAE: 0.8646678328514099
     else:
         net.load_model()
         net.inference_each_emo()

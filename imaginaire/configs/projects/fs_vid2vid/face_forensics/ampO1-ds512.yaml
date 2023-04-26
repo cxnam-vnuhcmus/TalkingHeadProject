@@ -137,7 +137,7 @@ data:
     initial_few_shot_K: 1
     for_face_dataset:
         add_upper_face: True    
-    num_workers: 4
+    num_workers: 2
     input_types:
         - images:
             ext: jpg
@@ -187,9 +187,9 @@ data:
 pretrained_weight: 1F_22ctFmo553nRHy1d_BX7aorc9zk9cF
 
 inference_args:    
-    few_shot_seq_index: 5
+    few_shot_seq_index: 1
     few_shot_frame_index: 1
-    driving_seq_index: 5
+    driving_seq_index: 1
     save_fake_only: False
 
 test_data:
@@ -232,8 +232,8 @@ test_data:
     test:
         is_lmdb: False
         roots:            
-            - MEAD/reference
-            - MEAD/driving
+            - CREMAD/reference
+            - CREMAD/driving
         batch_size: 1        
         augmentations:            
             resize_smallest_side: 1024

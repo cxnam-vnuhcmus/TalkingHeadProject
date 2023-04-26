@@ -13,3 +13,4 @@ imaginaire/**/*.pth
 my_framework/**/*.png
 my_framework/**/*.npy
 
+imaginaire/logs/*
