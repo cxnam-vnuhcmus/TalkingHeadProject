@@ -258,6 +258,7 @@ class A2LM_LMAudioPrev(nn.Module):
         if torch.cuda.is_available():
             self.cuda()
         lmd_loss = 0
+        lmv_loss = 0
         rmse_loss = 0
         mae_loss = 0
         with torch.no_grad():
@@ -269,10 +270,15 @@ class A2LM_LMAudioPrev(nn.Module):
                 lm_pred_newshape = lm_pred.reshape(lm_gt.shape[0],lm_gt.shape[1],68,2)
                 lm_gt_newshape = lm_gt.reshape(lm_gt.shape[0],lm_gt.shape[1],68,2)
                 
-                lmd = calculate_LMD_torch(lm_pred_newshape, 
-                                        lm_gt_newshape, 
+                lmd = calculate_LMD_torch(lm_pred_newshape[:,:,:48,:], 
+                                        lm_gt_newshape[:,:,:48,:], 
                                         norm_distance=1)
-                lmd_loss += lmd
+                lmd_loss += lmd 
+                
+                lmv = calculate_LMV_torch(lm_pred_newshape[:,:,:48,:], 
+                                        lm_gt_newshape[:,:,:48,:], 
+                                        norm_distance=1)
+                lmv_loss += lmv
                 
                 rmse = calculate_rmse_torch(lm_pred_newshape, lm_gt_newshape)
                 rmse_loss += rmse
@@ -280,7 +286,7 @@ class A2LM_LMAudioPrev(nn.Module):
                 mae = calculate_mae_torch(lm_pred_newshape, lm_gt_newshape)
                 mae_loss += mae
                 
-        return lmd_loss / len(self.val_dataloader), rmse_loss / len(self.val_dataloader), mae_loss / len(self.val_dataloader)
+        return lmd_loss / len(self.val_dataloader), lmv_loss / len(self.val_dataloader), rmse_loss / len(self.val_dataloader), mae_loss / len(self.val_dataloader)
     
     def load_model(self, filename='best_model.pt'):
         return load_model(self, self.optimizer, save_file=f'{args.save_path}/{filename}')
@@ -292,9 +298,10 @@ if __name__ == '__main__':
         net.train_all()
     elif args.val:
         net.load_model()
-        lmd,rmse,mae = net.calculate_val_lmd()
-        print(f'LMD: {lmd}; RMSE: {rmse}; MAE: {mae}')
-        #LMD: 2.01594624577499; RMSE: 3.188704252243042; MAE: 1.2722841501235962
+        lmd,lmv, rmse,mae = net.calculate_val_lmd()
+        print(f'LMD: {lmd};LMV: {lmv}; RMSE: {rmse}; MAE: {mae}')
+        #Epoch 492/MEAD: LMD: 2.0290853104940276;LMV: 1.307906150817871; RMSE: 3.1999154090881348; MAE: 1.2804210186004639
+        
     else:
         net.load_model()
         net.inference()

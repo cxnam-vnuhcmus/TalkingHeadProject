@@ -187,9 +187,9 @@ data:
 pretrained_weight: 1F_22ctFmo553nRHy1d_BX7aorc9zk9cF
 
 inference_args:    
-    few_shot_seq_index: 1
+    few_shot_seq_index: 6
     few_shot_frame_index: 1
-    driving_seq_index: 1
+    driving_seq_index: 6
     save_fake_only: False
 
 test_data:

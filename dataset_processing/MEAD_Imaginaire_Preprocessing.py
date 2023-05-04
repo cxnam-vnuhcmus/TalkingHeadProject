@@ -180,3 +180,14 @@ parser.add_argument("--imaginaire_folder", type=str, default='/root/TalkingHeadP
             
 # check_lm_img('/root/TalkingHeadProject/imaginaire/datasets512/val/landmarks-dlib68')
 
+def check_img_lm(folder):
+    json_list = sorted(glob(join(folder, '**/*.jpg'), recursive=True))
+    for json_file in tqdm(json_list, 'LM68: '):
+        img_file = json_file.replace('images', 'landmarks-dlib68')
+        img_file = img_file.replace('jpg', 'json')
+        if not os.path.exists(img_file):
+            print(json_file)
+            # cmd = f'rm {json_file}'
+            # subprocess.call(cmd, shell=True)    
+            
+check_img_lm('/root/TalkingHeadProject/imaginaire/datasets512/val/images')

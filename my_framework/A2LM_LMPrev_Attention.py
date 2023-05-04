@@ -13,16 +13,16 @@ from modules.net_module import conv2d
 from modules.face_visual_module import connect_face_keypoints
 from evaluation.evaluation_landmark import *
 
-dataset = 'CREMAD'
+dataset = 'MEAD'
 parser = argparse.ArgumentParser()
 parser.add_argument('--train_dataset_path', type=str, default=f'data/train_{dataset}.json')
 parser.add_argument('--val_dataset_path', type=str, default=f'data/val_{dataset}.json')
 
-parser.add_argument('--batch_size', type=int, default=1)
+parser.add_argument('--batch_size', type=int, default=32)
 parser.add_argument('--learning_rate', type=float, default=1.0e-4)
 parser.add_argument('--n_epoches', type=int, default=500)
 
-parser.add_argument('--save_path', type=str, default=f'result_A2LM_LMAudioPrev_Attention_{dataset}')
+parser.add_argument('--save_path', type=str, default=f'result_A2LM_LMPrev_Attention_{dataset}')
 parser.add_argument('--use_pretrain', action='store_true')
 parser.add_argument('--train', action='store_true')
 parser.add_argument('--val', action='store_true')
@@ -77,7 +77,7 @@ class A2LM(nn.Module):
                             bidirectional=False,
                             batch_first=True)
         
-        self.lm_lstm = nn.LSTM(input_size=self.audio_hidden_size * 2,
+        self.lm_lstm = nn.LSTM(input_size=self.audio_hidden_size * 1,
                             hidden_size=self.lm_hidden_size,
                             num_layers=self.lm_num_layers,
                             dropout=0,
@@ -117,10 +117,10 @@ class A2LM(nn.Module):
     def forward(self, audio):
         #audio: batch_size, seq_len, dim
         audio_out,_ = self.audio_lstm(audio)
-        lm_in = torch.zeros((audio_out.shape[0], audio_out.shape[1], audio_out.shape[2]*2)).cuda()
-        lm_in[:,0:1,:] = torch.cat((audio_out[:,0:1,:], audio_out[:,0:1,:]), dim=2)
+        lm_in = torch.zeros((audio_out.shape[0], audio_out.shape[1], audio_out.shape[2]*1)).cuda()
+        lm_in[:,0:1,:] = audio_out[:,0:1,:]
         for i in range(1, audio_out.size(1)):
-            lm_in[:,i:i+1,:] = torch.cat((audio_out[:,i-1:i,:], audio_out[:,i:i+1,:]), dim=2)
+            lm_in[:,i:i+1,:] = audio_out[:,i:i+1,:]
             
         lm_out,_ = self.lm_lstm(lm_in) #1,25,512
         
