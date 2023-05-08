@@ -270,13 +270,13 @@ class A2LM_LMAudioPrev(nn.Module):
                 lm_pred_newshape = lm_pred.reshape(lm_gt.shape[0],lm_gt.shape[1],68,2)
                 lm_gt_newshape = lm_gt.reshape(lm_gt.shape[0],lm_gt.shape[1],68,2)
                 
-                lmd = calculate_LMD_torch(lm_pred_newshape[:,:,:48,:], 
-                                        lm_gt_newshape[:,:,:48,:], 
+                lmd = calculate_LMD_torch(lm_pred_newshape[:,:,48:,:], 
+                                        lm_gt_newshape[:,:,48:,:], 
                                         norm_distance=1)
                 lmd_loss += lmd 
                 
-                lmv = calculate_LMV_torch(lm_pred_newshape[:,:,:48,:], 
-                                        lm_gt_newshape[:,:,:48,:], 
+                lmv = calculate_LMV_torch(lm_pred_newshape[:,:,48:,:], 
+                                        lm_gt_newshape[:,:,48:,:], 
                                         norm_distance=1)
                 lmv_loss += lmv
                 
@@ -297,9 +297,28 @@ if __name__ == '__main__':
     if args.train:
         net.train_all()
     elif args.val:
-        net.load_model()
+        net.load_model('e50-2023-04-07 20:03:14.594352.pt')
         lmd,lmv, rmse,mae = net.calculate_val_lmd()
         print(f'LMD: {lmd};LMV: {lmv}; RMSE: {rmse}; MAE: {mae}')
+        #Face
+        #Epoch 50/MEAD:  F-LD: 6.832689035229567;F-LVD: 3.4844164848327637; RMSE: 10.964693069458008; MAE: 4.57155179977417
+        #Epoch 100/MEAD: F-LD: 5.932588269070881;F-LVD: 2.756976366043091; RMSE: 8.227020263671875; MAE: 3.9305410385131836
+        #Epoch 150/MEAD: F-LD: 3.173133588418728;F-LVD: 1.9586735963821411; RMSE: 4.16469669342041; MAE: 2.097933292388916
+        #Epoch 200/MEAD: F-LD: 2.4917491354593415;F-LVD: 1.6462697982788086; RMSE: 3.500657081604004; MAE: 1.602452278137207
+        #Epoch 250/MEAD: F-LD: 2.2817777686002776;F-LVD: 1.504069447517395; RMSE: 3.343001127243042; MAE: 1.4679187536239624
+        #Epoch 300/MEAD: F-LD: 2.137982948524196;F-LVD: 1.4205504655838013; RMSE: 3.2616524696350098; MAE: 1.372382640838623
+        #Epoch 350/MEAD: F-LD: 2.0945796733949242;F-LVD: 1.3654778003692627; RMSE: 3.223966598510742; MAE: 1.3398289680480957
+        #Epoch 400/MEAD: F-LD: 2.007885339783459;F-LVD: 1.3190276622772217; RMSE: 3.1622045040130615; MAE: 1.2883893251419067
+        #Mouth
+        #Epoch 50/MEAD:  LMD: 7.827761603564751;LMV: 3.9937427043914795; RMSE: 10.973363876342773; MAE: 4.574895858764648
+        #Epoch 100/MEAD: LMD: 6.90499231873489;LMV: 3.177089214324951; RMSE: 8.249549865722656; MAE: 3.947064161300659
+        #Epoch 150/MEAD: LMD: 3.7055727708630446;LMV: 2.1686954498291016; RMSE: 4.15667200088501; MAE: 2.094221830368042
+        #Epoch 200/MEAD: LMD: 2.635167534758405;LMV: 1.7357745170593262; RMSE: 3.4499168395996094; MAE: 1.5956162214279175
+        #Epoch 250/MEAD: LMD: 2.423348028485368;LMV: 1.5628397464752197; RMSE: 3.3498404026031494; MAE: 1.469605565071106
+        #Epoch 300/MEAD: LMD: 2.2355713190102;LMV: 1.4511367082595825; RMSE: 3.232121706008911; MAE: 1.3603137731552124
+        #Epoch 350/MEAD: LMD: 2.1947758633915972;LMV: 1.426905870437622; RMSE: 3.230516195297241; MAE: 1.3332767486572266
+        #Epoch 400/MEAD: LMD: 2.1245031414962394;LMV: 1.381556749343872; RMSE: 3.1582114696502686; MAE: 1.290356159210205
+        
         #Epoch 492/MEAD: LMD: 2.0290853104940276;LMV: 1.307906150817871; RMSE: 3.1999154090881348; MAE: 1.2804210186004639
         
     else:

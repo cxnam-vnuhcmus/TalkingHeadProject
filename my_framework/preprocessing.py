@@ -240,6 +240,27 @@ def CREMADPreprocessing(train_file_name, val_file_name, **source_data_folder):
 
     with open(val_file_name, 'w') as f:
         json.dump(total_list[int(len(total_list) * 0.8):], f)
+
+def Mead_Emo_Preprocessing(train_file_name, val_file_name, **source_data_folder):
+    data_folder = os.path.dirname(train_file_name)
+    os.makedirs(data_folder, exist_ok=True)
+
+    print('Retrieve all audio feat files')
+    total_list = []
+    aufeat_paths = source_data_folder['aufeat_paths']
+    for aufeat_path in aufeat_paths:
+        aufeat_list = sorted(glob(os.path.join(aufeat_path, '**/*.npy'), recursive=True))
+        for feat_path in aufeat_list:
+            total_list.append(feat_path)
+    print(f'Total: {len(total_list)}')
+    random.seed(0)
+    random.shuffle(total_list)
+
+    with open(train_file_name, 'w') as f:
+        json.dump(total_list[:int(len(total_list) * 0.8)], f)
+
+    with open(val_file_name, 'w') as f:
+        json.dump(total_list[int(len(total_list) * 0.8):], f)
         
 if __name__ == '__main__':
     # MeadPreprocessing_v2(train_file_name = './data/train_MEAD_v2.json',
@@ -249,9 +270,15 @@ if __name__ == '__main__':
     #                   hop_len = 3
     #                   )
     
-    CREMADPreprocessing_v2(train_file_name = './data/train_CREMAD_v2.json',
-                      val_file_name = './data/val_CREMAD_v2.json',
-                      mfccs_path = '/root/Datasets/CREMA-D/Features/mfccs',
-                      win_len = 25,
-                      hop_len = 3
+    # CREMADPreprocessing_v2(train_file_name = './data/train_CREMAD_v2.json',
+    #                   val_file_name = './data/val_CREMAD_v2.json',
+    #                   mfccs_path = '/root/Datasets/CREMA-D/Features/mfccs',
+    #                   win_len = 25,
+    #                   hop_len = 3
+    #                   )
+    
+    Mead_Emo_Preprocessing(train_file_name = './data/train_emo_MEAD.json',
+                      val_file_name = './data/val_emo_MEAD.json',
+                      aufeat_paths = ['/root/Datasets/Features/M003/aufeat25',
+                                      '/root/Datasets/Features/M030/aufeat25']
                       )

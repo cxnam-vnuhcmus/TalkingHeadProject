@@ -13,12 +13,12 @@ from modules.net_module import conv2d
 from modules.face_visual_module import connect_face_keypoints
 from evaluation.evaluation_landmark import *
 
-dataset = 'CREMAD'
+dataset = 'MEAD'
 parser = argparse.ArgumentParser()
 parser.add_argument('--train_dataset_path', type=str, default=f'data/train_{dataset}.json')
 parser.add_argument('--val_dataset_path', type=str, default=f'data/val_{dataset}.json')
 
-parser.add_argument('--batch_size', type=int, default=1)
+parser.add_argument('--batch_size', type=int, default=32)
 parser.add_argument('--learning_rate', type=float, default=1.0e-4)
 parser.add_argument('--n_epoches', type=int, default=500)
 
@@ -268,9 +268,9 @@ class A2LM(nn.Module):
             
             outputs = []
             for i in range(len(outputs_gt)):
-                result_img = np.zeros((256, 256*2, 1))
-                result_img[:,:256,:] = outputs_gt[i] * 255
-                result_img[:,256:,:] = outputs_pred[i] * 255
+                result_img = np.zeros((256, 256, 3))
+                result_img[:,:,0:1] = outputs_gt[i] * 255
+                result_img[:,:,1:2] = outputs_pred[i] * 255
                 outputs.append(result_img)
             
             create_video(outputs,f'{args.save_path}/prediction.mp4',fps=10)
@@ -334,6 +334,8 @@ class A2LM(nn.Module):
             self.cuda()
         lmd_loss = 0
         lmv_loss = 0
+        fld_loss = 0
+        flvd_loss = 0
         rmse_loss = 0
         mae_loss = 0
         lmd_min = [100,100,100,100,100,100,100,100]
@@ -349,15 +351,25 @@ class A2LM(nn.Module):
                 lm_pred = self(audio)       #1,25,68*2
                 lm_pred_newshape = lm_pred.reshape(lm_gt.shape[0],lm_gt.shape[1],68,2)
                 lm_gt_newshape = lm_gt.reshape(lm_gt.shape[0],lm_gt.shape[1],68,2)
-                lmd = calculate_LMD_torch(lm_pred_newshape, 
-                                        lm_gt_newshape, 
+                lmd = calculate_LMD_torch(lm_pred_newshape[:,:,48:,:], 
+                                        lm_gt_newshape[:,:,48:,:], 
                                         norm_distance=1)
                 lmd_loss += lmd 
                 
-                lmv = calculate_LMV_torch(lm_pred_newshape, 
-                                        lm_gt_newshape, 
+                lmv = calculate_LMV_torch(lm_pred_newshape[:,:,48:,:], 
+                                        lm_gt_newshape[:,:,48:,:], 
                                         norm_distance=1)
                 lmv_loss += lmv
+                
+                fld = calculate_LMD_torch(lm_pred_newshape[:,:,:48,:], 
+                                        lm_gt_newshape[:,:,:48,:], 
+                                        norm_distance=1)
+                fld_loss += fld 
+                
+                flvd = calculate_LMV_torch(lm_pred_newshape[:,:,:48,:], 
+                                        lm_gt_newshape[:,:,:48,:], 
+                                        norm_distance=1)
+                flvd_loss += flvd
                 
                 rmse = calculate_rmse_torch(lm_pred_newshape, lm_gt_newshape)
                 rmse_loss += rmse
@@ -374,7 +386,7 @@ class A2LM(nn.Module):
         for id in range(len(lmd_min)):
             print(f'{id} : {lmd_min[id]} - {lmd_min_path[id]}')
                 
-        return lmd_loss / len(self.val_dataloader), lmv_loss / len(self.val_dataloader), rmse_loss / len(self.val_dataloader), mae_loss / len(self.val_dataloader)
+        return lmd_loss / len(self.val_dataloader), lmv_loss / len(self.val_dataloader),fld_loss / len(self.val_dataloader), flvd_loss / len(self.val_dataloader), rmse_loss / len(self.val_dataloader), mae_loss / len(self.val_dataloader)
     
     def load_model(self, filename='best_model.pt'):
         return load_model(self, self.optimizer, save_file=f'{args.save_path}/{filename}')
@@ -385,9 +397,19 @@ if __name__ == '__main__':
     if args.train:
         net.train_all()
     elif args.val:
-        net.load_model()
-        lmd, lmv,rmse,mae = net.calculate_val_lmd()
-        print(f'LMD: {lmd};LMV: {lmv}; RMSE: {rmse}; MAE: {mae}')
+        net.load_model('e400-2023-04-08 08:17:25.632272.pt')
+        lmd, lmv, fld, flvd, rmse,mae = net.calculate_val_lmd()
+        print(f'LMD: {lmd};LMV: {lmv};F-LD: {fld};F-LVD: {flvd}; RMSE: {rmse}; MAE: {mae}')
+        #Epoch 50/MEAD:  LMD: 4.410379845921586;LMV: 2.264491319656372;F-LD: 4.105265893587252;F-LVD: 2.0177090167999268; RMSE: 5.0789794921875; MAE: 2.6438090801239014
+        #Epoch 100/MEAD: LMD: 3.996739890517258;LMV: 2.1682395935058594;F-LD: 3.3555815685086134;F-LVD: 1.949436902999878; RMSE: 4.3910932540893555; MAE: 2.228925943374634
+        #Epoch 150/MEAD: LMD: 3.1293318184410652;LMV: 1.9373419284820557;F-LD: 2.8211854579972058;F-LVD: 1.7920507192611694; RMSE: 3.734647750854492; MAE: 1.8377188444137573
+        #Epoch 200/MEAD: LMD: 2.663476717181322;LMV: 1.7163478136062622;F-LD: 2.448796609552895;F-LVD: 1.6322695016860962; RMSE: 3.399491310119629; MAE: 1.5840797424316406
+        #Epoch 250/MEAD: LMD: 2.4293050213557916;LMV: 1.5708444118499756;F-LD: 2.2642236802636124;F-LVD: 1.5167795419692993; RMSE: 3.2338504791259766; MAE: 1.4591704607009888
+        #Epoch 300/MEAD: LMD: 2.3062494862370375;LMV: 1.4722583293914795;F-LD: 2.1150948855935074;F-LVD: 1.4372278451919556; RMSE: 3.1123502254486084; MAE: 1.369788408279419
+        #Epoch 350/MEAD: LMD: 2.295786046400303;LMV: 1.4060178995132446;F-LD: 2.081645365168409;F-LVD: 1.377501130104065; RMSE: 3.0708112716674805; MAE: 1.3527467250823975
+        #Epoch 400/MEAD: LMD: 2.1176823348533818;LMV: 1.3401939868927002;F-LD: 1.9752322071936073;F-LVD: 1.3183976411819458; RMSE: 2.976276397705078; MAE: 1.2722632884979248
+
+        
         #Epoch 100/MEAD: LMD: 3.5444338350761226;LMV: 2.01357364654541; RMSE: 4.393388271331787; MAE: 2.229139566421509
         #Epoch 300/MEAD: LMD: 2.172164072350758;LMV: 1.4477765560150146; RMSE: 3.112738609313965; MAE: 1.3703311681747437
         #Epoch 484/MEAD: LMD: 1.8943945998098792;LMV: 1.245319128036499; RMSE: 2.876394033432007; MAE: 1.1945229768753052
@@ -397,4 +419,5 @@ if __name__ == '__main__':
         #Epoch 385/CRMD: LMD: 1.3678209967911243;LMV: 1.1221470832824707; RMSE: 1.8277004957199097; MAE: 0.8646678328514099
     else:
         net.load_model()
-        net.inference_each_emo()
+        # net.inference_each_emo()
+        net.inference()

@@ -24,12 +24,13 @@ import python_speech_features
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--person", type=str, default='M030')
-parser.add_argument("--extract_audio", type=bool, default=True)
-parser.add_argument("--extract_images", type=bool, default=True)
-parser.add_argument("--extract_mfcc13", type=bool, default=True)
+parser.add_argument("--extract_audio", type=bool, default=False)
+parser.add_argument("--extract_images", type=bool, default=False)
+parser.add_argument("--extract_mfcc13", type=bool, default=False)
 parser.add_argument("--extract_lm68", type=bool, default=False)
-parser.add_argument("--extract_lm74", type=bool, default=True)
-parser.add_argument("--extract_faces", type=bool, default=True)
+parser.add_argument("--extract_lm74", type=bool, default=False)
+parser.add_argument("--extract_faces", type=bool, default=False)
+parser.add_argument("--extract_aufeat25", type=bool, default=True)
 
 if __name__ == '__main__':
     args = parser.parse_args()
@@ -272,4 +273,56 @@ if __name__ == '__main__':
                 img = cv2.resize( img, ( 256, 256 ), interpolation = cv2.INTER_AREA )
                 cv2.imwrite( outputPath, img)
             
+    if args.extract_aufeat25:
+        print('==Audio Features(25,) Extraction==')
+        inputFolder = join(root, f'Features/{args.person}/audios')
+        outputFolder = join(root, f'Features/{args.person}/aufeat25')
+        os.makedirs(outputFolder, exist_ok=True)
+        filelist = sorted(glob(join(inputFolder, '**/*.wav'), recursive=True))
+        
+        for idx, filename in tqdm(enumerate(filelist)):
+            subPath = filename[len(inputFolder)+1:-len('.wav')-5]
+            num = int(filename[-len('.wav')-3:-len('.wav')])           
+            outputPath = join(root, outputFolder, subPath, f'{num:05d}')
+            os.makedirs(outputPath, exist_ok=True)
             
+            imagePath = outputPath.replace('aufeat25', 'images')
+            num_frames = len(os.listdir(imagePath))
+
+            audio_signal, sr = librosa.load(filename, sr=16000)
+            win_length = sr//25
+            for i in range(num_frames):
+                try:
+                    y = audio_signal[i*win_length:i*win_length+win_length]
+                    # Rút trích đặc trưng âm thanh
+                    # Âm lượng
+                    rms = librosa.feature.rms(y=y)
+
+                    # Tần số cơ bản
+                    harmonic_freq = librosa.effects.harmonic(y)
+                    chroma = librosa.feature.chroma_cqt(y=harmonic_freq, sr=sr)
+
+                    # Tần số biên độ
+                    spectral_centroid = librosa.feature.spectral_centroid(y=y, sr=sr)
+                    spectral_bandwidth = librosa.feature.spectral_bandwidth(y=y, sr=sr)
+                    spectral_contrast = librosa.feature.spectral_contrast(y=y, sr=sr)
+
+                    # Mức độ biến đổi âm lượng và tần số
+                    spectral_flatness = librosa.feature.spectral_flatness(y=y)
+                    spectral_rolloff = librosa.feature.spectral_rolloff(y=y, sr=sr)
+
+                    # Compute zero-crossing rate (ZCR)
+                    zcr = librosa.feature.zero_crossing_rate(y=y)
+                    
+                    feat = np.concatenate([rms.flatten(),
+                                        chroma.flatten(),
+                                        spectral_centroid.flatten(),
+                                        spectral_bandwidth.flatten(),
+                                        spectral_contrast.flatten(),
+                                        spectral_flatness.flatten(),
+                                        spectral_rolloff.flatten(),
+                                        zcr.flatten()])
+                    
+                    np.save(join(outputPath, f'{i+1:05d}.npy'), feat)
+                except:
+                    continue

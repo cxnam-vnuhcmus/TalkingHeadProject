@@ -338,8 +338,8 @@ class A2LM(nn.Module):
         mae_loss = 0
         lmd_min = [100,100,100,100,100,100,100,100]
         lmd_min_path = ['','','','','','','','']
-        # emo_mapping = ['angry', 'disgusted', 'contempt', 'fear', 'happy', 'sad', 'surprised', 'neutral']
-        emo_mapping = ['ANG', 'DIS', 'contempt', 'FEA', 'HAP', 'SAD', 'surprised', 'NEU']
+        emo_mapping = ['angry', 'disgusted', 'contempt', 'fear', 'happy', 'sad', 'surprised', 'neutral']
+        # emo_mapping = ['ANG', 'DIS', 'contempt', 'FEA', 'HAP', 'SAD', 'surprised', 'NEU']
 
         with torch.no_grad():
             for step, (audio, lm_gt, _, data_path) in tqdm(enumerate(self.val_dataloader)):
@@ -349,13 +349,13 @@ class A2LM(nn.Module):
                 lm_pred = self(audio)       #1,25,68*2
                 lm_pred_newshape = lm_pred.reshape(lm_gt.shape[0],lm_gt.shape[1],68,2)
                 lm_gt_newshape = lm_gt.reshape(lm_gt.shape[0],lm_gt.shape[1],68,2)
-                lmd = calculate_LMD_torch(lm_pred_newshape, 
-                                        lm_gt_newshape, 
+                lmd = calculate_LMD_torch(lm_pred_newshape[:,:,:48,:], 
+                                        lm_gt_newshape[:,:,:48,:], 
                                         norm_distance=1)
                 lmd_loss += lmd 
                 
-                lmv = calculate_LMV_torch(lm_pred_newshape, 
-                                        lm_gt_newshape, 
+                lmv = calculate_LMV_torch(lm_pred_newshape[:,:,:48,:], 
+                                        lm_gt_newshape[:,:,:48,:], 
                                         norm_distance=1)
                 lmv_loss += lmv
                 
@@ -385,12 +385,18 @@ if __name__ == '__main__':
     if args.train:
         net.train_all()
     elif args.val:
-        net.load_model()
+        net.load_model('e250-2023-05-05 02:22:58.956456.pt')
         lmd, lmv,rmse,mae = net.calculate_val_lmd()
         print(f'LMD: {lmd};LMV: {lmv}; RMSE: {rmse}; MAE: {mae}')
         #Epoch 100/MEAD: LMD: 3.5444338350761226;LMV: 2.01357364654541; RMSE: 4.393388271331787; MAE: 2.229139566421509
         #Epoch 300/MEAD: LMD: 2.172164072350758;LMV: 1.4477765560150146; RMSE: 3.112738609313965; MAE: 1.3703311681747437
         #Epoch 484/MEAD: LMD: 1.8943945998098792;LMV: 1.245319128036499; RMSE: 2.876394033432007; MAE: 1.1945229768753052
+        #Epoch 250/MEAD (w/o prev audio): 
+        #                LMD: 2.0454160512947457;LMV: 1.3600245714187622; RMSE: 2.978646755218506; MAE: 1.2895727157592773
+        #Epoch 350/MEAD (w/o prev audio): 
+        #                LMD: 1.927496439073144;LMV: 1.2441768646240234; RMSE: 2.891848564147949; MAE: 1.2149802446365356
+        #Epoch 493/MEAD (w/o prev audio): 
+        #                LMD: 1.827983921620904;LMV: 1.176079511642456; RMSE: 2.810358762741089; MAE: 1.1523898839950562
         #Epoch 105/CRMD: LMD: 1.8502711271867156;LMV: 1.41961669921875; RMSE: 2.289553165435791; MAE: 1.1693556308746338
         #Epoch 196/CRMD: LMD: 1.5343044173593323;LMV: 1.2477023601531982; RMSE: 1.9643146991729736; MAE: 0.9698354601860046
         #Epoch 300/CRMD: LMD: 1.4413805628816287;LMV: 1.1612162590026855; RMSE: 1.8930352926254272; MAE: 0.9108084440231323
