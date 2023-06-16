@@ -276,7 +276,7 @@ if __name__ == '__main__':
     if args.extract_aufeat25:
         print('==Audio Features(25,) Extraction==')
         inputFolder = join(root, f'Features/{args.person}/audios')
-        outputFolder = join(root, f'Features/{args.person}/aufeat25')
+        outputFolder = join(root, f'Features/{args.person}/aufeat50')
         os.makedirs(outputFolder, exist_ok=True)
         filelist = sorted(glob(join(inputFolder, '**/*.wav'), recursive=True))
         
@@ -286,43 +286,44 @@ if __name__ == '__main__':
             outputPath = join(root, outputFolder, subPath, f'{num:05d}')
             os.makedirs(outputPath, exist_ok=True)
             
-            imagePath = outputPath.replace('aufeat25', 'images')
+            imagePath = outputPath.replace('aufeat50', 'images')
             num_frames = len(os.listdir(imagePath))
 
             audio_signal, sr = librosa.load(filename, sr=16000)
             win_length = sr//25
-            for i in range(num_frames):
-                try:
-                    y = audio_signal[i*win_length:i*win_length+win_length]
-                    # Rút trích đặc trưng âm thanh
-                    # Âm lượng
-                    rms = librosa.feature.rms(y=y)
+            # for i in range(num_frames):
+            # try:
+            # y = audio_signal[i*win_length:i*win_length+win_length]
+            y = audio_signal
+            # Rút trích đặc trưng âm thanh
+            # Âm lượng
+            rms = librosa.feature.rms(y=y, frame_length=win_length, hop_length=win_length)
 
-                    # Tần số cơ bản
-                    harmonic_freq = librosa.effects.harmonic(y)
-                    chroma = librosa.feature.chroma_cqt(y=harmonic_freq, sr=sr)
+            # Tần số cơ bản
+            harmonic_freq = librosa.effects.harmonic(y)
+            chroma = librosa.feature.chroma_cqt(y=harmonic_freq, sr=sr, hop_length=win_length)
 
-                    # Tần số biên độ
-                    spectral_centroid = librosa.feature.spectral_centroid(y=y, sr=sr)
-                    spectral_bandwidth = librosa.feature.spectral_bandwidth(y=y, sr=sr)
-                    spectral_contrast = librosa.feature.spectral_contrast(y=y, sr=sr)
+            # Tần số biên độ
+            spectral_centroid = librosa.feature.spectral_centroid(y=y, sr=sr, win_length=win_length, hop_length=win_length)
+            spectral_bandwidth = librosa.feature.spectral_bandwidth(y=y, sr=sr, win_length=win_length, hop_length=win_length)
+            spectral_contrast = librosa.feature.spectral_contrast(y=y, sr=sr, win_length=win_length, hop_length=win_length)
 
-                    # Mức độ biến đổi âm lượng và tần số
-                    spectral_flatness = librosa.feature.spectral_flatness(y=y)
-                    spectral_rolloff = librosa.feature.spectral_rolloff(y=y, sr=sr)
+            # Mức độ biến đổi âm lượng và tần số
+            spectral_flatness = librosa.feature.spectral_flatness(y=y, win_length=win_length, hop_length=win_length)
+            spectral_rolloff = librosa.feature.spectral_rolloff(y=y, sr=sr, win_length=win_length, hop_length=win_length)
 
-                    # Compute zero-crossing rate (ZCR)
-                    zcr = librosa.feature.zero_crossing_rate(y=y)
-                    
-                    feat = np.concatenate([rms.flatten(),
-                                        chroma.flatten(),
-                                        spectral_centroid.flatten(),
-                                        spectral_bandwidth.flatten(),
-                                        spectral_contrast.flatten(),
-                                        spectral_flatness.flatten(),
-                                        spectral_rolloff.flatten(),
-                                        zcr.flatten()])
-                    
-                    np.save(join(outputPath, f'{i+1:05d}.npy'), feat)
-                except:
-                    continue
+            # Compute zero-crossing rate (ZCR)
+            zcr = librosa.feature.zero_crossing_rate(y=y, frame_length=win_length, hop_length=win_length)
+            
+            for i in range(rms.shape[1]):
+                feat = np.concatenate([rms[:,i].flatten(),
+                                chroma[:,i].flatten(),
+                                spectral_centroid[:,i].flatten(),
+                                spectral_bandwidth[:,i].flatten(),
+                                spectral_contrast[:,i].flatten(),
+                                spectral_flatness[:,i].flatten(),
+                                spectral_rolloff[:,i].flatten(),
+                                zcr[:,i].flatten()])
+                np.save(join(outputPath, f'{i+1:05d}.npy'), feat)
+            # except:
+            #     continue

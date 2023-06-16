@@ -670,6 +670,25 @@ def read_data_from_path(mfcc_path=None, lm_path=None, face_path=None, start=None
         'bb_list': bb_list
     }
     
+def read_aufeat_from_path(aufeat_path, start=None, end=None):
+    aufeat_data_list = []
+    aufeat_list = sorted(glob(join(aufeat_path, '*.npy')))
+    if start is None and end is None:
+        start = 0
+        end = 1
+    else:
+        start, end = int(start), int(end)
+    if end == -1:
+        end = len(aufeat_list) - 1
+    
+    for index in range(start,end):
+        aufeat_file = os.path.join(aufeat_path, f'{index+1:05d}.npy')
+        aufeat_data = np.load(aufeat_file)
+        aufeat_data = np.expand_dims(aufeat_data, axis=0)
+        aufeat_data_list.append(aufeat_data)
+    aufeat_data_list = np.vstack(aufeat_data_list).astype(np.float32)
+    return aufeat_data_list
+        
 def save_model(model, epoch, optimizer=None, save_file='.'):
     dir_name = os.path.dirname(save_file)
     os.makedirs(dir_name, exist_ok=True)

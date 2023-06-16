@@ -21,7 +21,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--train_dataset_path', type=str, default=f'data/train_emo_{dataset}.json')
 parser.add_argument('--val_dataset_path', type=str, default=f'data/val_emo_{dataset}.json')
 
-parser.add_argument('--batch_size', type=int, default=32)
+parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--learning_rate', type=float, default=1.0e-4)
 parser.add_argument('--n_epoches', type=int, default=500)
 
@@ -41,31 +41,64 @@ class FaceDataset(Dataset):
         torch.autograd.set_detect_anomaly(True)
         
     def __getitem__(self, index):
-        #/root/Datasets/Features/M030/aufeat25/contempt/level_1/00015/00017.npy
-        data_path = self.data_path[index]  
-        parts = data_path.split('/')
+        aufeat_path = self.data_path[index]  
+        aufeat = read_aufeat_from_path(aufeat_path, start=0, end=-1)
+        parts = aufeat_path.split('/')
         emo_mapping = ['angry', 'disgusted', 'contempt', 'fear', 'happy', 'sad', 'surprised', 'neutral']
         lv_mapping = ['level_1','level_2','level_3']
-        emo_embed = emo_mapping.index(parts[-4])
-        lv_embed = lv_mapping.index(parts[-3])
-        data = np.load(data_path).astype(np.float32)
-        return  torch.from_numpy(data), torch.tensor(emo_embed), torch.tensor(lv_embed)
+        emo_embed = [emo_mapping.index(parts[-3])] * aufeat.shape[0]
+        lv_embed = [lv_mapping.index(parts[-2])] * aufeat.shape[0]
+        
+        
+        return  torch.from_numpy(aufeat), torch.tensor(emo_embed), torch.tensor(lv_embed)
 
     def __len__(self):
         return len(self.data_path)
-        # return 32
+        # return 2
         
 class A2LM(nn.Module):
     def __init__(self):
         super().__init__()
-        self.input_size = 50
-        self.fc0 = nn.Linear(self.input_size, 256)
-        self.fc1 = nn.Linear(256, 128)
-        self.fc2 = nn.Linear(128, 64)
-        self.fc3 = nn.Linear(64, 32)
-        self.fc31 = nn.Linear(32, 8)
-        self.fc4 = nn.Linear(64, 32)
-        self.fc41 = nn.Linear(32, 3)
+        self.input_size = 25
+        self.output_emo_size = 8
+        self.output_lv_size = 3
+        self.fc1 = nn.Sequential(
+                nn.Linear(in_features=self.input_size, out_features=512),
+                nn.BatchNorm1d(512),
+                nn.LeakyReLU(0.2),
+                nn.Linear(512, 512),
+                )
+        self.LSTM = nn.LSTM(input_size=512,
+                            hidden_size=256,
+                            num_layers=3,
+                            dropout=0,
+                            bidirectional=False,
+                            batch_first=True)
+        self.fc2 = nn.Sequential(
+                nn.Linear(in_features=256, out_features=128),
+                nn.BatchNorm1d(128),
+                nn.LeakyReLU(0.2),
+                nn.Linear(128, 128),
+                nn.BatchNorm1d(128),
+                nn.LeakyReLU(0.2),
+                nn.Linear(128, 64),
+                nn.BatchNorm1d(64),
+                nn.LeakyReLU(0.2)
+                )
+        
+        self.fc3 = nn.Sequential(
+                nn.Linear(64, 64),
+                nn.BatchNorm1d(64),
+                nn.LeakyReLU(0.2),
+                nn.Linear(64, self.output_emo_size)
+                )
+        
+        self.fc4 = nn.Sequential(
+                nn.Linear(64, 64),
+                nn.BatchNorm1d(64),
+                nn.LeakyReLU(0.2),
+                nn.Linear(64, self.output_lv_size)
+                )
         
         self.train_dataset = FaceDataset(args.train_dataset_path)
         self.val_dataset = FaceDataset(args.val_dataset_path)
@@ -92,14 +125,18 @@ class A2LM(nn.Module):
         return parameters 
     
     def forward(self, audio):
-        #audio: batch_size, dim
-        output = torch.relu(self.fc0(audio))
-        output = torch.relu(self.fc1(output))
-        output = torch.relu(self.fc2(output))
-        output1 = torch.relu(self.fc3(output))
-        output1 = self.fc31(output1)
-        output2 = torch.relu(self.fc4(output))
-        output2 = self.fc41(output2)
+        #audio: batch_size, seq_length, dim
+        bs, seq, dim = audio.shape
+        output = audio.view(-1, dim)
+        output = self.fc1(output)
+        output = output.view(bs, seq, -1)
+        output, _ = self.LSTM(output)
+        output = output.view(-1, output.shape[-1])
+        output = self.fc2(output)
+        output1 = self.fc3(output)
+        # output1 = output1.view(bs, seq, -1)
+        output2 = self.fc4(output)
+        # output2 = output2.view(bs, seq, -1)
         return output1, output2
         
         
@@ -147,9 +184,11 @@ class A2LM(nn.Module):
         running_loss = 0
         for step, (audio, emo_gt, lv_gt) in enumerate(self.train_dataloader):            
             if torch.cuda.is_available():
-                audio, emo_gt, lv_gt = audio.cuda(), emo_gt.cuda(), lv_gt.cuda()      
+                audio, emo_gt, lv_gt = audio.cuda(), emo_gt.cuda(), lv_gt.cuda()   
+                emo_gt = emo_gt.view(-1)
+                lv_gt = lv_gt.view(-1)   
              
-            emo_pred, lv_pred = self(audio)   #1,25,68*2
+            emo_pred, lv_pred = self(audio)   #bs,seq,dim
             
             self.optimizer.zero_grad()
             emo_loss = self.emoloss(emo_pred, emo_gt)
@@ -168,22 +207,28 @@ class A2LM(nn.Module):
     def validate_epoch(self, epoch):
         self.eval()
         running_loss = 0
+        emo_correct = 0
         with torch.no_grad():
             for step, (audio, emo_gt, lv_gt) in enumerate(self.val_dataloader):
                 if torch.cuda.is_available():
                     audio, emo_gt, lv_gt = audio.cuda(), emo_gt.cuda(), lv_gt.cuda()      
- 
+                    emo_gt = emo_gt.view(-1)
+                    lv_gt = lv_gt.view(-1)  
+                    
                 emo_pred, lv_pred = self(audio)   #1,25,68*2
+                emo_pred_softmax = nn.functional.softmax(emo_pred, dim=1)
+                emo_pred_index = torch.argmax(emo_pred_softmax, dim=1)
+                emo_correct = emo_correct + torch.nonzero(emo_pred_index - emo_gt).size(0)
                 
-                self.optimizer.zero_grad()
                 emo_loss = self.emoloss(emo_pred, emo_gt)
                 lv_loss = self.lvloss(lv_pred, lv_gt)
                 loss = emo_loss + lv_loss * 0.1     
                 
                 running_loss += loss.item()
-                msg = f"\r| Step: {step}/{len(self.val_dataloader)} of epoch {epoch} | Val Loss: {loss:#.4} |"
+                msg = f"\r| Step: {step}/{len(self.val_dataloader)} of epoch {epoch} | Emo loss: {emo_loss:#.4} Val Loss: {loss:#.4} |"
                 sys.stdout.write(msg)
                 sys.stdout.flush()
+            print(f'Accuracy: {emo_correct/(len(self.val_dataloader)*args.batch_size)}')
         return running_loss / len(self.val_dataloader)
     
     def load_model(self, filename='best_model.pt'):
@@ -195,6 +240,8 @@ if __name__ == '__main__':
     if args.train:
         net.train_all()
     else:
-        net.load_model()
-        net.validate_epoch()
+        epoch = net.load_model()
+        if torch.cuda.is_available():
+            net.cuda()
+        net.validate_epoch(epoch)
 

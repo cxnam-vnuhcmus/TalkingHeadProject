@@ -251,7 +251,8 @@ def Mead_Emo_Preprocessing(train_file_name, val_file_name, **source_data_folder)
     for aufeat_path in aufeat_paths:
         aufeat_list = sorted(glob(os.path.join(aufeat_path, '**/*.npy'), recursive=True))
         for feat_path in aufeat_list:
-            total_list.append(feat_path)
+            total_list.append(os.path.dirname(feat_path))
+    total_list = list(set(total_list))
     print(f'Total: {len(total_list)}')
     random.seed(0)
     random.shuffle(total_list)
@@ -279,6 +280,6 @@ if __name__ == '__main__':
     
     Mead_Emo_Preprocessing(train_file_name = './data/train_emo_MEAD.json',
                       val_file_name = './data/val_emo_MEAD.json',
-                      aufeat_paths = ['/root/Datasets/Features/M003/aufeat25',
-                                      '/root/Datasets/Features/M030/aufeat25']
+                      aufeat_paths = ['/root/Datasets/Features/M003/aufeat50',
+                                      '/root/Datasets/Features/M030/aufeat50']
                       )

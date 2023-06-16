@@ -10,6 +10,7 @@ from torch.utils.data import Dataset, DataLoader
 from modules.util_module import *
 from modules.net_module import conv2d
 from modules.face_visual_module import connect_face_keypoints
+from evaluation.evaluation_landmark import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--train_dataset_path', type=str, default='data/train_MEAD.json')
@@ -22,6 +23,7 @@ parser.add_argument('--n_epoches', type=int, default=500)
 parser.add_argument('--save_path', type=str, default='result_A2LM_Conv')
 parser.add_argument('--use_pretrain', type=bool, default=False)
 parser.add_argument('--train', action='store_true')
+parser.add_argument('--val', action='store_true')
 args = parser.parse_args()
 
 class FaceDataset(Dataset):
@@ -232,6 +234,53 @@ class A2LM_LSTM(nn.Module):
             
             create_video(outputs,f'{args.save_path}/prediction.mp4', fps=10)
     
+    def calculate_val_lmd(self):
+        if torch.cuda.is_available():
+            self.cuda()
+        lmd_loss = 0
+        lmv_loss = 0
+        fld_loss = 0
+        flvd_loss = 0
+        rmse_loss = 0
+        mae_loss = 0
+
+        with torch.no_grad():
+            for step, (audio, lm_gt) in tqdm(enumerate(self.val_dataloader)):
+                if torch.cuda.is_available():
+                    audio,lm_gt = audio.cuda(), lm_gt.cuda() 
+                
+                # audio = audio.reshape(audio.shape[0], audio.shape[1], -1)   #1,25,28*12
+                lm_pred = self(audio)       #1,25,68*2
+                lm_pred_newshape = lm_pred.reshape(lm_gt.shape[0],lm_gt.shape[1],68,2)
+                lm_gt_newshape = lm_gt.reshape(lm_gt.shape[0],lm_gt.shape[1],68,2)
+                lmd = calculate_LMD_torch(lm_pred_newshape[:,:,48:,:], 
+                                        lm_gt_newshape[:,:,48:,:], 
+                                        norm_distance=1)
+                lmd_loss += lmd 
+                
+                lmv = calculate_LMV_torch(lm_pred_newshape[:,:,48:,:], 
+                                        lm_gt_newshape[:,:,48:,:], 
+                                        norm_distance=1)
+                lmv_loss += lmv
+                
+                fld = calculate_LMD_torch(lm_pred_newshape[:,:,:48,:], 
+                                        lm_gt_newshape[:,:,:48,:], 
+                                        norm_distance=1)
+                fld_loss += fld 
+                
+                flvd = calculate_LMV_torch(lm_pred_newshape[:,:,:48,:], 
+                                        lm_gt_newshape[:,:,:48,:], 
+                                        norm_distance=1)
+                flvd_loss += flvd
+                
+                rmse = calculate_rmse_torch(lm_pred_newshape, lm_gt_newshape)
+                rmse_loss += rmse
+                
+                mae = calculate_mae_torch(lm_pred_newshape, lm_gt_newshape)
+                mae_loss += mae
+                                
+        return lmd_loss / len(self.val_dataloader), lmv_loss / len(self.val_dataloader),fld_loss / len(self.val_dataloader), flvd_loss / len(self.val_dataloader), rmse_loss / len(self.val_dataloader), mae_loss / len(self.val_dataloader)
+   
     def load_model(self, filename='best_model.pt'):
         return load_model(self, self.optimizer, save_file=f'{args.save_path}/{filename}')
             
@@ -240,6 +289,10 @@ if __name__ == '__main__':
     net = A2LM_LSTM()
     if args.train:
         net.train_all()
+    elif args.val:
+        net.load_model()
+        lmd, lmv, fld, flvd, rmse,mae = net.calculate_val_lmd()
+        print(f'LMD: {lmd};LMV: {lmv};F-LD: {fld};F-LVD: {flvd}; RMSE: {rmse}; MAE: {mae}')
     else:
         net.load_model()
         net.inference()
